@@ -8,6 +8,7 @@ tile_house = 1
 tile_road = 2
 
 num_players = 2
+player_radius = 1
 
 input_keys = {
 {
@@ -22,6 +23,10 @@ input_keys = {
 		down = "s",
 		right = "d",
 }
+}
+player_colors = {
+    {1,0,0,1},
+    {0,0.5,1,1},
 }
 
 function spring(x,target_x,v,k,d,dt)
@@ -41,6 +46,7 @@ function love.load(arg)
 			player.speed = 0
 			player.accel = 0
 			player.inputs = input_keys[i_player]
+            player.color = player_colors[i_player]
 			players[i_player] = player
 		end
 
@@ -65,7 +71,17 @@ function love.keypressed( key )
 end
 
 function love.update(dt)
-    for _,player in pairs(players) do
+    local last_players = {}
+    for i,player in pairs(players) do
+        last_player = {}
+        for k,v in pairs(player) do
+            last_player[k] = v
+        end
+        last_players[i] = last_player
+    end
+
+    for i,player in pairs(players) do
+        local last_player
         local target_speed = 0
         local delta_angle = 0
         if love.keyboard.isDown(player.inputs.up) then
@@ -77,19 +93,51 @@ function love.update(dt)
         if love.keyboard.isDown(player.inputs.right) then
             delta_angle =  4*dt
         end
-         -- TODO(Vidar):Spring eq for speed??
-        --player.speed = target_speed
-	player.speed, player.accel =spring(player.speed, target_speed, player.accel, 80.0, 0.83, dt)
+        player.speed, player.accel =spring(player.speed, target_speed, player.accel, 80.0, 0.73, dt)
         player.angle = player.angle + delta_angle
         local cos_angle = math.cos(player.angle)
         local sin_angle = math.sin(player.angle)
-
-	print(player.speed .. " " .. target_speed)
 
         local dx = cos_angle * player.speed * dt
         local dy = sin_angle * player.speed * dt
         player.x = player.x + dx
         player.y = player.y + dy
+        -- Obstacle collision
+        -- TODO(Vidar):Implement
+    end
+    for i,player in pairs(players) do
+        local last_player = last_players[i]
+        -- Player collision
+        for j,other_player in pairs(last_players) do
+            local last_other_player = last_players[j]
+            local r = 2*player_radius
+            local ox = last_player.x - last_other_player.x
+            local oy = last_player.y - last_other_player.y
+            local ex = player.x - other_player.x
+            local ey = player.y - other_player.y
+            local dx = ex - ox
+            local dy = ey - oy
+            local a = dx*dx + dy*dy
+            local b = 2*(ox*dx + oy*dy)
+            local c = ox*ox + oy*oy
+            local discr2 = b*b - 4*a*c
+            if discr2 > 0.0 then
+                local discr = math.sqrt(discr2)
+                local t1 = (-b-discr)/(2*a)
+                local t2 = ( b-discr)/(2*a)
+                if t1 < t2 then
+                    local tmp = t1
+                    t1 = t2
+                    t2 = tmp
+                end
+                if t1 >= 0 and t1 <= 1 then
+                    print("Hit t1")
+                end
+                if t2 >= 0 and t2 <= 1 then
+                    print("Hit t2")
+                end
+            end
+        end
     end
 end
 
@@ -108,8 +156,9 @@ function love.draw(dt)
 
 		for i_player = 1,num_players do
 				local player = players[i_player]
-				love.graphics.setColor(1.0,1.0,1.0,1.0)
+				love.graphics.setColor(player.color)
 				love.graphics.rectangle("fill",player.x-0.5,player.y-0.5,1,1)
+                love.graphics.circle("fill",player.x, player.y, player_radius)
 		end
 
 		love.graphics.pop()
