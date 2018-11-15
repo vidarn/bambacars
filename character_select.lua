@@ -6,7 +6,8 @@ local anime_line_pixelcode = [[
     {
         float f = texture_coords.x+texture_coords.y;
         float a = (step(t-0.1,f) -step(t,f));
-        vec4 texcolor = a*vec4(1,1,1,1) + (1-a)*Texel(texture, texture_coords) * color;
+        vec4 c = Texel(texture, texture_coords) * color;
+        vec4 texcolor = a*vec4(c.a) + (1-a)*c;
         return texcolor;
     }
 ]]
