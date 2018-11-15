@@ -1,1 +1,2 @@
-# crazy_pizza_game
+# Bambacars
+A game for 6 players
