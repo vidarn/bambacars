@@ -1,5 +1,6 @@
 debug = true
 
+require("title_screen")
 require("game")
 require("character_select")
 
@@ -27,6 +28,8 @@ player_colors = {
 	{1,0.5,0,1},
 	{0,0.5,1,1},
 	{0.5,1,0,1},
+	{0.5,0,0.5,1},
+	{1,1,1,1},
 }
 characters = {
 	{name="Greedo"},
@@ -36,7 +39,7 @@ characters = {
 num_characters = 3
 
 if true then
-	game_state = "character_select"
+	game_state = "title"
 	game_countdown = 3
 else
 	game_state = "game"
@@ -56,14 +59,17 @@ end
 function love.load(arg)
 	print("Load!")
 	num_keyboard_players = num_players
+	title_font = love.graphics.newFont("Assets/Fonts/Asap-SemiBold.ttf",120)
 	main_font = love.graphics.newFont("Assets/Fonts/Asap-SemiBold.ttf",30)
 	large_font = love.graphics.newFont("Assets/Fonts/Asap-SemiBold.ttf",80)
 	love.graphics.setFont(main_font)
 	joysticks = love.joystick.getJoysticks()
 	print("Joysticks:")
 	for _,joystick in pairs(joysticks) do 
-		print(joystick:getName())
-		num_players = num_players +1
+		print(joystick:getName():sub(1,1))
+		if joystick:getName():sub(1,1) == "X" then
+			num_players = num_players +1
+		end
 	end
 	for i_player =1,num_players do
 		local player = {active=false}
@@ -76,11 +82,15 @@ function love.load(arg)
 		player.color = player_colors[i_player]
 		players[i_player] = player
 	end
+	load_title()
 	load_game()
 	load_character_select()
 end
 
 function love.update(dt)
+	if game_state == "title" then
+		update_title(dt)
+	end
 	if game_state == "game" then
 		update_game(dt)
 	end
@@ -92,6 +102,9 @@ end
 function love.draw()
 	love.graphics.push()
 	love.graphics.scale(scale,scale)
+	if game_state == "title" then
+		draw_title(dt)
+	end
 	if game_state == "game" then
 		draw_game()
 	end
@@ -104,5 +117,8 @@ end
 function love.keypressed(key)
 	if game_state == "character_select" then
 		keypressed_character_select(key)
+	end
+	if game_state == "title" then
+		keypressed_title(key)
 	end
 end

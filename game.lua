@@ -95,7 +95,8 @@ function update_game(dt)
 		for i,player in pairs(players) do
 			local target_speed = 0
 			local delta_angle = 0
-			local max_speed = 300
+			local max_speed = 400
+			local angle_speed = 8
 			if player.input_keys then
 				if love.keyboard.isDown(player.input_keys.up) then
 					target_speed = max_speed
@@ -104,17 +105,21 @@ function update_game(dt)
 					target_speed = -50
 				end
 				if love.keyboard.isDown(player.input_keys.left) then
-					delta_angle = -4*dt
+					delta_angle = -angle_speed*dt
 				end
 				if love.keyboard.isDown(player.input_keys.right) then
-					delta_angle =  4*dt
+					delta_angle =  angle_speed*dt
 				end
 			elseif player.input_joystick then
 				target_speed = player.input_joystick:getGamepadAxis("triggerright")*max_speed
-				delta_angle =  player.input_joystick:getGamepadAxis("leftx")*4*dt
+				delta_angle =  player.input_joystick:getGamepadAxis("leftx")*angle_speed*dt
 
 			end
-			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 20.0, 0.85, dt)
+			if target_speed > player.speed then
+				player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
+			else
+				player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
+			end
 			player.angle = player.angle + delta_angle * (player.speed)/max_speed
 			local cos_angle = math.cos(player.angle)
 			local sin_angle = math.sin(player.angle)
@@ -171,6 +176,8 @@ function update_game(dt)
 						post_collision_players_pos[i].y = ret.y
 						player.vx = ret.vx
 						player.vy = ret.vy
+						player.speed = 0
+						player.accel = 0
 					end
 				end
 			end
