@@ -13,12 +13,14 @@ input_keys = {
 		down = "down",
 		left = "left",
 		right = "right",
+		accept = "return"
 	},
 	{
 		up = "w",
 		left = "a",
 		down = "s",
 		right = "d",
+		accept = "space"
 	}
 }
 player_colors = {
@@ -28,12 +30,19 @@ player_colors = {
 }
 characters = {
 	{name="Greedo"},
-	{name="Dude"},
+	{name="Takeshi", sprite = love.graphics.newImage("Assets/Characters/Takeshi_Portrait.png")},
 	{name="Robot"},
 }
 num_characters = 3
 
-game_state = "character_select"
+if true then
+	game_state = "character_select"
+	game_countdown = 3
+else
+	game_state = "game"
+	game_countdown = 0
+end
+
 
 function spring(x,target_x,v,k,d,dt)
 	local delta = target_x - x
@@ -63,6 +72,7 @@ function love.load(arg)
 		else
 			player.input_joystick = joysticks[i_player - num_keyboard_players]
 		end
+		player.character_index = i_player
 		player.color = player_colors[i_player]
 		players[i_player] = player
 	end
@@ -89,4 +99,10 @@ function love.draw()
 		draw_character_select()
 	end
 	love.graphics.pop()
+end
+
+function love.keypressed(key)
+	if game_state == "character_select" then
+		keypressed_character_select(key)
+	end
 end

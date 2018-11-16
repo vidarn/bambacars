@@ -1,41 +1,64 @@
 local card_flip_anim = {}
+local card_done_anim = {}
 
-local anime_line_pixelcode = [[
-    uniform float t;
-    vec4 effect( vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords )
-    {
-        float f = texture_coords.x+texture_coords.y;
-        float a = (step(t-0.1,f) -step(t,f));
-        vec4 c = Texel(texture, texture_coords) * color;
-        vec4 texcolor = a*vec4(c.a) + (1-a)*c;
-        return texcolor;
-    }
+local card_pixelcode = [[
+uniform float line_t;
+vec4 effect( vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords )
+{
+	float f = texture_coords.x+texture_coords.y;
+	float a = (step(line_t-0.3,f) -step(line_t,f));
+	vec4 c = Texel(texture, texture_coords) * color;
+	vec4 texcolor = a*vec4(c.a) + (1-a)*c;
+	return texcolor;
+}
 ]]
- 
-local anime_line_vertexcode = [[
-    vec4 position( mat4 transform_projection, vec4 vertex_position )
-    {
-        return transform_projection * vertex_position;
-    }
+
+local card_vertexcode = [[
+//uniform float flip_t;
+vec4 position( mat4 transform_projection, vec4 vertex_position )
+{
+	vec4 p = transform_projection * vertex_position;
+	return p;
+}
 ]] 
 
 function load_character_select()
-    anime_line_shader = love.graphics.newShader(anime_line_pixelcode,anime_line_vertexcode)
+	card_shader = love.graphics.newShader(card_pixelcode,card_vertexcode)
 	for i,player in pairs(players) do
-		player.character_index = i
+		player.done = false
 	end
 end
 
-anime_line_t =-2
 function update_character_select(dt)
 	for i,_ in pairs(card_flip_anim) do
 		card_flip_anim[i] = card_flip_anim[i] - dt*10
 		if card_flip_anim[i] < -1 then card_flip_anim[i] = -1 end
 	end
-    anime_line_t = anime_line_t +dt
+	for i,_ in pairs(card_done_anim) do
+		card_done_anim[i] = card_done_anim[i] - dt
+		if card_done_anim[i] < -1 then card_done_anim[i] = -1 end
+	end
+	local all_done = true
+	local num_players = 0
+	for i,player in pairs(players) do
+		if player.active then
+			if not player.done then
+				all_done = false
+			end
+			num_players = num_players + 1
+		end
+	end
+	for i,a in pairs(card_done_anim) do
+		if a > 0 then 
+			all_done = false
+		end
+	end
+	if all_done and num_players >1 then
+		game_state = "game"
+	end
 end
 
-function love.keypressed(key)
+function keypressed_character_select(key)
 	if key == "escape" then
 		game_state = "game"
 		print("blajj")
@@ -45,16 +68,22 @@ function love.keypressed(key)
 			for action,k in pairs(player.input_keys) do
 				if k == key then 
 					if player.active then 
-						if action == "left" then 
-							player.character_index = player.character_index - 1
-                            card_flip_anim[i] = 1.0
+						if not player.done then 
+							if action == "left" then 
+								player.character_index = player.character_index - 1
+								card_flip_anim[i] = 1.0
+							end
+							if action == "right" then 
+								player.character_index = player.character_index + 1
+								card_flip_anim[i] = 1.0
+							end
+							if action == "accept" then 
+								player.done = true
+								card_done_anim[i] = 1.0
+							end
+							if player.character_index < 1 then player.character_index = num_characters end
+							if player.character_index > num_characters then player.character_index = 1 end
 						end
-						if action == "right" then 
-							player.character_index = player.character_index + 1
-                            card_flip_anim[i] = 1.0
-						end
-						if player.character_index < 1 then player.character_index = num_characters end
-						if player.character_index > num_characters then player.character_index = 1 end
 					else
 						card_flip_anim[i] = 1.0
 						player.active = true
@@ -68,29 +97,34 @@ end
 function love.gamepadpressed(gamepad, button)
 	for i,player in pairs(players) do 
 		if player.input_joystick and player.input_joystick == gamepad then 
-			if player.active then 
-				if button == "dpleft" then 
-					player.character_index = player.character_index - 1
-                            card_flip_anim[i] = 1.0
-                    card_flip_anim[i] = 1.0
+			if not player.done then 
+				if player.active then 
+					if button == "dpleft" then 
+						player.character_index = player.character_index - 1
+						card_flip_anim[i] = 1.0
+					end
+					if button == "dpright" then 
+						player.character_index = player.character_index + 1
+						card_flip_anim[i] = 1.0
+					end
+					if button == "a" then 
+						player.done = true
+						card_done_anim[i] = 1.0
+					end
+					if player.character_index < 1 then player.character_index = num_characters end
+					if player.character_index > num_characters then player.character_index = 1 end
+				else
+					card_flip_anim[i] = 1.0
+					player.active = true
 				end
-				if button == "dpright" then 
-					player.character_index = player.character_index + 1
-                    card_flip_anim[i] = 1.0
-				end
-				if player.character_index < 1 then player.character_index = num_characters end
-				if player.character_index > num_characters then player.character_index = 1 end
-			else
-				card_flip_anim[i] = 1.0
-				player.active = true
 			end
 		end
 	end
 end
 
 function draw_character_select()
-	local rect_w = 400
-	local rect_h = 500
+	local rect_w = 512
+	local rect_h = 512
 	local rect_spacing_x = 80
 	local rect_spacing_y = 30
 	local rows = 2
@@ -113,28 +147,42 @@ function draw_character_select()
 			local y = (r-1)*(rect_h+rect_spacing_y)
 
 			love.graphics.push()
-            love.graphics.translate(x+rect_w/2,y)
+			love.graphics.translate(x+rect_w/2,y)
+			local flip_t = 1
 			if card_flip_anim[i] then
-				love.graphics.scale(math.abs(card_flip_anim[i]),1)
+				flip_t = card_flip_anim[i]
 			end
-            love.graphics.translate(-rect_w/2,0)
 
-            love.graphics.setShader(anime_line_shader)
-            anime_line_shader:send("t",anime_line_t)
+			love.graphics.setShader(card_shader)
 
-			love.graphics.setColor(col)
-			love.graphics.rectangle("fill",0, 0, rect_w, rect_h)
+			local line_t = 1
+			if card_done_anim[i] then 
+				line_t = 1-card_done_anim[i]
+			else
+			end
+
+			love.graphics.scale(math.abs(flip_t),1)
+			--card_shader:send("flip_t",flip_t)
+			card_shader:send("line_t",line_t)
+
+			love.graphics.translate(-rect_w/2,0)
+
+			love.graphics.setColor(1,1,1,1)
+			if character and character.sprite then
+				card_shader:send("line_t",line_t*10)
+				love.graphics.draw(character.sprite)
+			else
+				love.graphics.setColor(col)
+				love.graphics.rectangle("fill",0, 0, rect_w, rect_h)
+			end
+
 			love.graphics.setFont(main_font)
 			local text_col = {col[1]+0.4, col[2]+0.4, col[3]+0.4, 1}
 			love.graphics.setColor(text_col)
 			love.graphics.print("P"..i,0,0)
 
-			if character then
-				love.graphics.setColor(1,1,1,1)
-				love.graphics.print(character.name,0,rect_h-100)
-			end
 			love.graphics.pop()
-            love.graphics.setShader()
+			love.graphics.setShader()
 
 			i = i + 1
 		end
