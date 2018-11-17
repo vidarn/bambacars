@@ -277,7 +277,7 @@ function draw_game(dt)
 		love.graphics.draw(player.sprite[sprite_index+1],player.x-32,player.y-32)
 		if player.inventory then
 			love.graphics.setFont(main_font)
-			love.graphics.print(player.inventory, player.x-8, player.y-16)
+			--love.graphics.print(player.inventory, player.x-8, player.y-16)
 		end
 	end
 	love.graphics.setColor(1,1,1,1)
@@ -286,12 +286,12 @@ function draw_game(dt)
 		local r = 16
 		local bounce = math.abs(math.sin(pickup.bounce_timer*6))
 		love.graphics.setFont(main_font)
-		love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
+		--love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
 		love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
 	end
 	for _,person in pairs(hungry_people) do 
 		love.graphics.setFont(main_font)
-		love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
+		--love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
 		love.graphics.circle("fill",person.x,person.y,2)
 	end
 
@@ -318,10 +318,10 @@ function draw_game(dt)
 	end
 
 	love.graphics.translate(1920/2,1080/2)
-	love.graphics.setFont(large_font)
+	love.graphics.setFont(title_font)
 	if game_countdown > 0 then
-		love.graphics.printf(math.ceil(game_countdown), -100, 0, 200, "center")
+		love.graphics.printf(math.ceil(game_countdown), -200, -100, 400, "center")
 	elseif game_countdown > -1 then
-		love.graphics.printf("GO!", -100, 0, 200, "center")
+		love.graphics.printf("GO!", -200, -100, 400, "center")
 	end
 end

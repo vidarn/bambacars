@@ -4,7 +4,6 @@ require("title_screen")
 require("game")
 require("character_select")
 
-scale = 1.0
 joysticks = {}
 num_players = 2
 players = {}
@@ -101,7 +100,14 @@ end
 
 function love.draw()
 	love.graphics.push()
-	love.graphics.scale(scale,scale)
+    local width, height = love.graphics.getDimensions()
+    local xscale = width/1920
+    local yscale = height/1080
+    if yscale < xscale then
+        love.graphics.scale(yscale,yscale)
+    else
+        love.graphics.scale(xscale,xscale)
+    end
 	if game_state == "title" then
 		draw_title(dt)
 	end
