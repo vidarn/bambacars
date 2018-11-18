@@ -55,6 +55,9 @@ function update_character_select(dt)
 	end
 	if all_done and num_players >1 then
 		game_state = "game"
+        for i,player in pairs(players) do
+            player.done = false
+        end
 	end
 end
 

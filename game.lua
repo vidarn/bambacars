@@ -1,19 +1,32 @@
-local map = {}
-local game = {}
 
 local player_radius = 16
+local food_spawn_cooldown = 0
 
-local pickups = {
-	{name="pizza", x=200,y=300, bounce_timer = 0},
-	{name="hot dog", x=800,y=600, bounce_timer = 0}
-}
+local pickups = { } 
+local hungry_people = { }
+local hungry_people_spawn_queue = { }
+local hungry_people_locations = { }
 
-local hungry_people = {
-	{wants="pizza", x= 600, y =200},
-	{wants="hot dog", x= 1200, y =800}
-}
+local food_spawn_points = { }
+local num_active_food = 0
 
-function load_game()
+function reset_game()
+	game_countdown = 3
+    food_spawn_cooldown = 0
+    pickups = {}
+    hungry_people = { }
+    hungry_people_spawn_queue = { }
+    hungry_people_locations = {
+        {x= 600, y =200},
+        {x= 1200, y =800},
+        {x= 400, y =200},
+        {x= 1500, y =300},
+    }
+    food_spawn_points = {
+        {name="pizza",x=100,y=200},
+        {name="hot dog",x=700,y=900},
+        {name="ice cream",x=500,y=700},
+    }
 	for i,player in pairs(players) do
 		player.x = 700 - 100*i
 		player.y = 500
@@ -43,7 +56,51 @@ function load_game()
 			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0015.png"),
 		}
 	end
+end
+
+function load_game()
+    reset_game()
 	bkg_image = love.graphics.newImage("Assets/City/townmap_03.jpg")
+end
+
+
+function spawn_food()
+    local available_food = {}
+    for _,fs in pairs(food_spawn_points) do 
+        local n = fs.name
+        local ok = true
+        for _,p in pairs(pickups) do 
+            if p.name == n then
+                ok = false
+            end
+        end
+        if ok then
+            table.insert(available_food,fs)
+        end
+    end
+    local num_food_spawn_points = #available_food
+    if num_food_spawn_points == 0 then
+        return
+    end
+    local r = math.random(num_food_spawn_points)
+    for i = 1,9999 do
+        if pickups[i] == nil then
+            pickups[i] = {}
+            for k,v in pairs(available_food[r]) do
+                pickups[i][k] = v
+            end
+            local food_name= pickups[i].name
+            local r2 = math.random(#hungry_people_locations)
+            local hungry_people_location = hungry_people_locations[r2]
+            table.remove(hungry_people_locations,r2)
+            local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name}
+            hungry_person.spawn_cooldown = 0.7
+            table.insert(hungry_people_spawn_queue, hungry_person)
+            pickups[i].bounce_timer = 0
+            num_active_food = num_active_food+1
+            break
+        end
+    end
 end
 
 function check_circles_collision(c1, c2)
@@ -201,9 +258,10 @@ function update_game(dt)
 					local tmp = player.inventory
 					player.inventory = pickup.name
 					player.swap_cooldown = 0.5
-					pickup.name = tmp
 					if tmp == nil then
 						table.insert(to_delete,j)
+                    else
+                        pickup.name = tmp
 					end
 				end
 
@@ -227,11 +285,13 @@ function update_game(dt)
 				if ret and player.inventory == person.wants then
 					player.score = player.score + 1
 					player.inventory = nil
+                    num_active_food = num_active_food-1
 					table.insert(to_delete,j)
 				end
 
 			end
 			for _,j in pairs(to_delete) do 
+                table.insert(hungry_people_locations,hungry_people[j])
 				hungry_people[j] = nil
 			end
 		end
@@ -251,10 +311,36 @@ function update_game(dt)
 				player.y = player.y - 1080
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
+            if player.score >= 3 then
+                winning_player = player
+                print("Player "..i.." wins!")
+                game_state = "win"
+                reset_game()
+            end
 		end
 		for i,pickup in pairs(pickups) do 
 			pickup.bounce_timer = pickup.bounce_timer + dt
 		end
+        for i = #hungry_people_spawn_queue,1,-1 do
+            local person = hungry_people_spawn_queue[i]
+            person.spawn_cooldown = person.spawn_cooldown - dt
+            if person.spawn_cooldown < 0 then
+                for j=1,999 do
+                    if hungry_people[j] == nil then
+                        hungry_people[j] = person
+                        break
+                    end
+                end
+                table.remove(hungry_people_spawn_queue,i)
+            end
+		end
+        if food_spawn_cooldown < 0 then
+            if num_active_food < 3 then
+                spawn_food()
+            end
+            food_spawn_cooldown = math.random()*4+0.3
+        end
+        food_spawn_cooldown = food_spawn_cooldown - dt
 	end
 	game_countdown = game_countdown - dt
 end
@@ -277,21 +363,23 @@ function draw_game(dt)
 		love.graphics.draw(player.sprite[sprite_index+1],player.x-32,player.y-32)
 		if player.inventory then
 			love.graphics.setFont(main_font)
-			--love.graphics.print(player.inventory, player.x-8, player.y-16)
+			love.graphics.print(player.inventory, player.x-8, player.y-16)
 		end
 	end
 	love.graphics.setColor(1,1,1,1)
 
 	for _,pickup in pairs(pickups) do 
-		local r = 16
-		local bounce = math.abs(math.sin(pickup.bounce_timer*6))
-		love.graphics.setFont(main_font)
-		--love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
-		love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+        if pickup then
+            local r = 16
+            local bounce = math.abs(math.sin(pickup.bounce_timer*6))
+            love.graphics.setFont(main_font)
+            love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
+            love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+        end
 	end
 	for _,person in pairs(hungry_people) do 
 		love.graphics.setFont(main_font)
-		--love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
+		love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
 		love.graphics.circle("fill",person.x,person.y,2)
 	end
 

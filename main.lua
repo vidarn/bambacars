@@ -3,6 +3,7 @@ debug = true
 require("title_screen")
 require("game")
 require("character_select")
+require("win_screen")
 
 joysticks = {}
 num_players = 2
@@ -82,6 +83,7 @@ function love.load(arg)
 		players[i_player] = player
 	end
 	load_title()
+	load_win()
 	load_game()
 	load_character_select()
 end
@@ -96,6 +98,9 @@ function love.update(dt)
 	if game_state == "character_select" then
 		update_character_select(dt)
 	end
+	if game_state == "win" then
+		update_win(dt)
+	end
 end
 
 function love.draw()
@@ -104,8 +109,10 @@ function love.draw()
     local xscale = width/1920
     local yscale = height/1080
     if yscale < xscale then
+        love.graphics.translate((1920*xscale-1920*yscale)/2,0)
         love.graphics.scale(yscale,yscale)
     else
+        love.graphics.translate(0,(1080*yscale-1080*xscale)/2)
         love.graphics.scale(xscale,xscale)
     end
 	if game_state == "title" then
@@ -117,6 +124,9 @@ function love.draw()
 	if game_state == "character_select" then
 		draw_character_select()
 	end
+	if game_state == "win" then
+		draw_win(dt)
+	end
 	love.graphics.pop()
 end
 
@@ -126,5 +136,8 @@ function love.keypressed(key)
 	end
 	if game_state == "title" then
 		keypressed_title(key)
+	end
+	if game_state == "win" then
+		keypressed_win(key)
 	end
 end
