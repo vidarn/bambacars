@@ -61,6 +61,17 @@ end
 function load_game()
     reset_game()
 	bkg_image = love.graphics.newImage("Assets/City/townmap_03.jpg")
+    local obst_file = io.open("/tmp/batman.sdf","rb")
+    local obst_data = obst_file:read("*all")
+    obst_file:close()
+    local w, h, pos = love.data.unpack("=ii",obst_data)
+    print(string.format("w: %f, h: %f, pos: %d",w,h,pos))
+    obstacle_sdf = {}
+    for i=1,w*h do 
+        obstacle_sdf[i],pos = love.data.unpack("f",obst_data,pos)
+    end
+    obstacle_w = w
+    obstacle_h = h
 end
 
 
@@ -405,6 +416,7 @@ function draw_game(dt)
 		love.graphics.pop()
 	end
 
+    love.graphics.push()
 	love.graphics.translate(1920/2,1080/2)
 	love.graphics.setFont(title_font)
 	if game_countdown > 0 then
@@ -412,4 +424,16 @@ function draw_game(dt)
 	elseif game_countdown > -1 then
 		love.graphics.printf("GO!", -200, -100, 400, "center")
 	end
+    love.graphics.pop()
+
+    local rect_w = 1920/obstacle_w
+    local rect_h = 1080/obstacle_h
+    for y=1,obstacle_h do
+        for x=1,obstacle_w do
+            local v = obstacle_sdf[x+(y-1)*obstacle_w]
+            v = (v + 2)/5
+            love.graphics.setColor(v,v,v,1)
+            love.graphics.rectangle("fill",(x-1)*rect_w,(y-1)*rect_h,rect_w,rect_h)
+        end
+    end
 end
