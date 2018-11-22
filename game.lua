@@ -191,16 +191,22 @@ function collide_sdf(x1, x2, y1, y2,sdf)
         end
         nx = nx/n
         ny = ny/n
-        --if hit then
-            --local dot = dx/d*nx + dy/d*ny
-            --print(string.format("dot: %f",dot))
-            --if math.abs(dot) < 0.5 then
-                --hit = false
-            --end
-        --end
+        if hit then
+            tx = -ny
+            ty = nx
+            local dot_t = dx/d*tx + dy/d*ty
+            if math.abs(dot_t) > 0.2 then
+                print("glance")
+                hit = false
+                x1 = x1 + nx*1/1920
+                y1 = y1 + ny*1/980
+            end
+            x1 = x1 + tx*(d*(1-t))*dot_t 
+            y1 = y1 + ty*(d*(1-t))*dot_t
+        end
         return x1*1920,y1*980,hit,-nx,-ny
     else
-        --print("inside")
+        print("inside")
         local gx,gy = sdf_get_gradient(sdf,x1,y1)
         local n = math.sqrt(gx*gx + gy*gy)
         if n == 0 then
@@ -260,7 +266,7 @@ end
 
 function player_steer(player, target_angle, target_speed_fraction,dt)
         local max_speed = 400
-        local max_delta_angle = 0.1
+        local max_delta_angle = 0.2
         target_speed = max_speed*target_speed_fraction
         if target_speed > player.speed then
             player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
@@ -382,8 +388,8 @@ function update_game(dt)
                 print("HIT!")
                 player.vx = nx*100
                 player.vy = ny*100
-                --player.speed = 0
-                --player.accel = 0
+                player.speed = 0
+                player.accel = 0
             end
 		end
 		for i,player in pairs(players) do
@@ -493,8 +499,11 @@ function update_game(dt)
 end
 
 function draw_game(dt)
+    love.graphics.push()
+	love.graphics.translate(0,100)
 	love.graphics.setColor(1,1,1,1)
 	love.graphics.draw(bkg_image)
+
 
 	if false then
 		local rect_w = 1920/obstacle_sdf.w
@@ -553,6 +562,10 @@ function draw_game(dt)
 		love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
 		love.graphics.circle("fill",person.x,person.y,2)
 	end
+    love.graphics.pop()
+
+    love.graphics.setColor(0,0,0,1)
+    love.graphics.rectangle('fill',0,0, 1920,100)
 
 	for i_player = 1,num_players do
 		local player = players[i_player]
@@ -562,7 +575,7 @@ function draw_game(dt)
 		love.graphics.translate((i_player-1)*200,0)
 		if character and character.sprite then
 			love.graphics.push()
-			love.graphics.scale(0.2)
+			love.graphics.scale(100/512)
 			love.graphics.draw(character.sprite)
 			love.graphics.pop()
 		else

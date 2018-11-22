@@ -42,7 +42,7 @@ if false then
 	game_state = "title"
 	game_countdown_start = 3
 else
-	game_state = "game"
+	game_state = "character_select"
 	game_countdown_start = 0
 end
 
