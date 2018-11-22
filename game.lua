@@ -11,22 +11,22 @@ local food_spawn_points = { }
 local num_active_food = 0
 
 function reset_game()
-	game_countdown = 3
-    food_spawn_cooldown = 0
-    pickups = {}
-    hungry_people = { }
-    hungry_people_spawn_queue = { }
-    hungry_people_locations = {
-        {x= 600, y =200},
-        {x= 1200, y =800},
-        {x= 400, y =200},
-        {x= 1500, y =300},
-    }
-    food_spawn_points = {
-        {name="pizza",x=100,y=200},
-        {name="hot dog",x=700,y=900},
-        {name="ice cream",x=500,y=700},
-    }
+	game_countdown = game_countdown_start
+	food_spawn_cooldown = 0
+	pickups = {}
+	hungry_people = { }
+	hungry_people_spawn_queue = { }
+	hungry_people_locations = {
+		{x= 600, y =200},
+		{x= 1200, y =800},
+		{x= 400, y =200},
+		{x= 1500, y =300},
+	}
+	food_spawn_points = {
+		{name="pizza",x=100,y=200},
+		{name="hot dog",x=700,y=900},
+		{name="ice cream",x=500,y=700},
+	}
 	for i,player in pairs(players) do
 		player.x = 700 - 100*i
 		player.y = 500
@@ -59,58 +59,159 @@ function reset_game()
 end
 
 function load_game()
-    reset_game()
-	bkg_image = love.graphics.newImage("Assets/City/townmap_03.jpg")
-    local obst_file = io.open("/tmp/batman.sdf","rb")
-    local obst_data = obst_file:read("*all")
-    obst_file:close()
-    local w, h, pos = love.data.unpack("=ii",obst_data)
-    print(string.format("w: %f, h: %f, pos: %d",w,h,pos))
-    obstacle_sdf = {}
-    for i=1,w*h do 
-        obstacle_sdf[i],pos = love.data.unpack("f",obst_data,pos)
-    end
-    obstacle_w = w
-    obstacle_h = h
+	reset_game()
+	bkg_image = love.graphics.newImage("Assets/City/townmap_04.jpg")
+	local obst_data = love.filesystem.read("string", "Assets/City/townmap_04_sdf.sdf")
+	local w, h, pos = love.data.unpack("=ii",obst_data)
+	print(string.format("w: %f, h: %f, pos: %d",w,h,pos))
+	obstacle_sdf = {}
+	for i=1,w*h do 
+		obstacle_sdf[i],pos = love.data.unpack("f",obst_data,pos)
+	end
+	obstacle_sdf.w = w
+	obstacle_sdf.h = h
 end
 
 
 function spawn_food()
-    local available_food = {}
-    for _,fs in pairs(food_spawn_points) do 
-        local n = fs.name
-        local ok = true
-        for _,p in pairs(pickups) do 
-            if p.name == n then
-                ok = false
-            end
+	local available_food = {}
+	for _,fs in pairs(food_spawn_points) do 
+		local n = fs.name
+		local ok = true
+		for _,p in pairs(pickups) do 
+			if p.name == n then
+				ok = false
+			end
+		end
+		if ok then
+			table.insert(available_food,fs)
+		end
+	end
+	local num_food_spawn_points = #available_food
+	if num_food_spawn_points == 0 then
+		return
+	end
+	local r = math.random(num_food_spawn_points)
+	for i = 1,9999 do
+		if pickups[i] == nil then
+			pickups[i] = {}
+			for k,v in pairs(available_food[r]) do
+				pickups[i][k] = v
+			end
+			local food_name= pickups[i].name
+			local r2 = math.random(#hungry_people_locations)
+			local hungry_people_location = hungry_people_locations[r2]
+			table.remove(hungry_people_locations,r2)
+			local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name}
+			hungry_person.spawn_cooldown = 0.7
+			table.insert(hungry_people_spawn_queue, hungry_person)
+			pickups[i].bounce_timer = 0
+			num_active_food = num_active_food+1
+			break
+		end
+	end
+end
+
+function sdf_get_value(sdf,x,y)
+	local w = sdf.w
+	local h = sdf.h
+	local ix = math.floor(w*x)
+	local iy = math.floor(h*y)
+	local tx = w*x-ix
+	local ty = h*y-iy
+	if ix >= w then 
+		ix = w-1
+		tx = 1
+	end
+	if ix < 1 then 
+		ix = 1
+		tx = 0
+	end
+	if iy >= h then 
+		iy = h-1
+		ty = 1
+	end
+	if iy < 1 then 
+		iy = 1
+		ty = 0
+	end
+	local v00 = sdf[(ix+0)+(iy-1)*w]
+	local v01 = sdf[(ix+0)+(iy+0)*w]
+	local v10 = sdf[(ix+1)+(iy-1)*w]
+	local v11 = sdf[(ix+1)+(iy+0)*w]
+	local x0 = v00*(1-tx) + v10*tx
+	local x1 = v01*(1-tx) + v11*tx
+	return -(x0*(1-ty) + x1*ty)
+end
+
+function sdf_get_gradient(sdf,x,y)
+    local delta = 0.001
+    local dx = (sdf_get_value(sdf,x+delta,y) - sdf_get_value(sdf,x-delta,y))/delta
+    local dy = (sdf_get_value(sdf,x,y+delta) - sdf_get_value(sdf,x,y-delta))/delta
+    return dx,dy
+end
+
+function sdf_trace(x,y,dx,dy,max_d,sdf,sign)
+    local num_steps = 100
+    local dd = max_d/num_steps
+    local d = dd
+    for i=1,num_steps do
+        local sdf_dist = sdf_get_value(sdf,x+dx*d,y+dy*d)
+        if sdf_dist*sign < 0 then
+            --TODO(Vidar):We can be more precise...
+            return d - dd/2,true
         end
-        if ok then
-            table.insert(available_food,fs)
-        end
+        d = d + dd
     end
-    local num_food_spawn_points = #available_food
-    if num_food_spawn_points == 0 then
-        return
-    end
-    local r = math.random(num_food_spawn_points)
-    for i = 1,9999 do
-        if pickups[i] == nil then
-            pickups[i] = {}
-            for k,v in pairs(available_food[r]) do
-                pickups[i][k] = v
-            end
-            local food_name= pickups[i].name
-            local r2 = math.random(#hungry_people_locations)
-            local hungry_people_location = hungry_people_locations[r2]
-            table.remove(hungry_people_locations,r2)
-            local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name}
-            hungry_person.spawn_cooldown = 0.7
-            table.insert(hungry_people_spawn_queue, hungry_person)
-            pickups[i].bounce_timer = 0
-            num_active_food = num_active_food+1
-            break
+    return d,false
+end
+
+function collide_sdf(x1, x2, y1, y2,sdf)
+    x1 = x1/1920
+    x2 = x2/1920
+    y1 = y1/980
+    y2 = y2/980
+    local dx = x2 - x1
+    local dy = y2 - y1
+    local d = math.sqrt(dx*dx + dy*dy)
+    local sdf_dist = sdf_get_value(sdf,x1,y1)
+
+    if sdf_dist >= 0 then
+        local nx = 0
+        local ny = 0
+        t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
+        x1 = x1+dx*t
+        y1 = y1+dy*t
+        nx,ny = sdf_get_gradient(sdf,x1,y1)
+        local n = math.sqrt(nx*nx + ny*ny)
+        if n == 0 then
+            nx = 1
+            ny = 0
+            n = 1
         end
+        nx = nx/n
+        ny = ny/n
+        --if hit then
+            --local dot = dx/d*nx + dy/d*ny
+            --print(string.format("dot: %f",dot))
+            --if math.abs(dot) < 0.5 then
+                --hit = false
+            --end
+        --end
+        return x1*1920,y1*980,hit,-nx,-ny
+    else
+        --print("inside")
+        local gx,gy = sdf_get_gradient(sdf,x1,y1)
+        local n = math.sqrt(gx*gx + gy*gy)
+        if n == 0 then
+            gx = 1
+            gy = 0
+            n = 1
+        end
+        gx = gx/n
+        gy = gy/n
+        d, hit = sdf_trace(x1,y1,gx,gy,30/1920,sdf,-1)
+        return (x1 + gx*d)*1920, (y1 + gy*d)*980,hit,gx,gy
     end
 end
 
@@ -157,38 +258,63 @@ function check_circles_collision(c1, c2)
 	end
 end
 
+function player_steer(player, target_angle, target_speed_fraction,dt)
+        local max_speed = 400
+        local max_delta_angle = 0.1
+        target_speed = max_speed*target_speed_fraction
+        if target_speed > player.speed then
+            player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
+        else
+            player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
+        end
+        if target_speed > 0 then
+            delta_angle = target_angle - player.angle
+            while delta_angle > math.pi do
+                delta_angle = delta_angle - math.pi*2
+            end
+            while delta_angle <-math.pi do
+                delta_angle = delta_angle + math.pi*2
+            end
+            delta_angle = delta_angle * (player.speed)/max_speed  
+            delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
+            player.angle = player.angle + delta_angle * 40* dt
+        end
+        return player
+end
+
 function update_game(dt)
 	if game_countdown < 0 then 
 		local pre_collision_players_pos = {}
 		for i,player in pairs(players) do
 			local target_speed = 0
-			local delta_angle = 0
-			local max_speed = 400
-			local angle_speed = 8
+			local target_angle = 0
+            local dx = 0
+            local dy = 0
 			if player.input_keys then
+                local target_angles = {}
 				if love.keyboard.isDown(player.input_keys.up) then
-					target_speed = max_speed
+                    dy = -1
 				end
 				if love.keyboard.isDown(player.input_keys.down) then
-					target_speed = -50
+                    dy = 1
 				end
 				if love.keyboard.isDown(player.input_keys.left) then
-					delta_angle = -angle_speed*dt
+                    dx = -1
 				end
 				if love.keyboard.isDown(player.input_keys.right) then
-					delta_angle =  angle_speed*dt
+                    dx = 1
 				end
 			elseif player.input_joystick then
-				target_speed = player.input_joystick:getGamepadAxis("triggerright")*max_speed
-				delta_angle =  player.input_joystick:getGamepadAxis("leftx")*angle_speed*dt
+                dx = player.input_joystick:getGamepadAxis("leftx")
+                dy = player.input_joystick:getGamepadAxis("lefty")
+			end
+            if dx ~= 0 or dy ~= 0 then
+                target_angle = math.atan2(dy,dx)
+                target_speed = 1
+            end
 
-			end
-			if target_speed > player.speed then
-				player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
-			else
-				player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
-			end
-			player.angle = player.angle + delta_angle * (player.speed)/max_speed
+            player = player_steer(player,target_angle, target_speed,dt)
+
 			local cos_angle = math.cos(player.angle)
 			local sin_angle = math.sin(player.angle)
 
@@ -249,6 +375,16 @@ function update_game(dt)
 					end
 				end
 			end
+            post_collision_players_pos[i].x, post_collision_players_pos[i].y,
+                hit, nx, ny = 
+                collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y,obstacle_sdf)
+            if hit then
+                print("HIT!")
+                player.vx = nx*100
+                player.vy = ny*100
+                --player.speed = 0
+                --player.accel = 0
+            end
 		end
 		for i,player in pairs(players) do
 			local post_pos_player = post_collision_players_pos[i]
@@ -271,8 +407,8 @@ function update_game(dt)
 					player.swap_cooldown = 0.5
 					if tmp == nil then
 						table.insert(to_delete,j)
-                    else
-                        pickup.name = tmp
+					else
+						pickup.name = tmp
 					end
 				end
 
@@ -296,13 +432,13 @@ function update_game(dt)
 				if ret and player.inventory == person.wants then
 					player.score = player.score + 1
 					player.inventory = nil
-                    num_active_food = num_active_food-1
+					num_active_food = num_active_food-1
 					table.insert(to_delete,j)
 				end
 
 			end
 			for _,j in pairs(to_delete) do 
-                table.insert(hungry_people_locations,hungry_people[j])
+				table.insert(hungry_people_locations,hungry_people[j])
 				hungry_people[j] = nil
 			end
 		end
@@ -322,36 +458,36 @@ function update_game(dt)
 				player.y = player.y - 1080
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
-            if player.score >= 3 then
-                winning_player = player
-                print("Player "..i.." wins!")
-                game_state = "win"
-                reset_game()
-            end
+			if player.score >= 3 then
+				winning_player = player
+				print("Player "..i.." wins!")
+				game_state = "win"
+				reset_game()
+			end
 		end
 		for i,pickup in pairs(pickups) do 
 			pickup.bounce_timer = pickup.bounce_timer + dt
 		end
-        for i = #hungry_people_spawn_queue,1,-1 do
-            local person = hungry_people_spawn_queue[i]
-            person.spawn_cooldown = person.spawn_cooldown - dt
-            if person.spawn_cooldown < 0 then
-                for j=1,999 do
-                    if hungry_people[j] == nil then
-                        hungry_people[j] = person
-                        break
-                    end
-                end
-                table.remove(hungry_people_spawn_queue,i)
-            end
+		for i = #hungry_people_spawn_queue,1,-1 do
+			local person = hungry_people_spawn_queue[i]
+			person.spawn_cooldown = person.spawn_cooldown - dt
+			if person.spawn_cooldown < 0 then
+				for j=1,999 do
+					if hungry_people[j] == nil then
+						hungry_people[j] = person
+						break
+					end
+				end
+				table.remove(hungry_people_spawn_queue,i)
+			end
 		end
-        if food_spawn_cooldown < 0 then
-            if num_active_food < 3 then
-                spawn_food()
-            end
-            food_spawn_cooldown = math.random()*4+0.3
-        end
-        food_spawn_cooldown = food_spawn_cooldown - dt
+		if food_spawn_cooldown < 0 then
+			if num_active_food < 3 then
+				spawn_food()
+			end
+			food_spawn_cooldown = math.random()*4+0.3
+		end
+		food_spawn_cooldown = food_spawn_cooldown - dt
 	end
 	game_countdown = game_countdown - dt
 end
@@ -359,6 +495,21 @@ end
 function draw_game(dt)
 	love.graphics.setColor(1,1,1,1)
 	love.graphics.draw(bkg_image)
+
+	if false then
+		local rect_w = 1920/obstacle_sdf.w
+		local rect_h = 980/obstacle_sdf.h
+		for y=1,obstacle_sdf.h do
+			for x=1,obstacle_sdf.w do
+				local v = obstacle_sdf[x+(y-1)*obstacle_sdf.w]
+				--v = (v)/2
+                if v < 0 then
+                    love.graphics.setColor(v,v,v,1)
+                    love.graphics.rectangle("fill",(x-1)*rect_w,(y-1)*rect_h,rect_w,rect_h)
+                end
+			end
+		end
+	end
 
 	for i_player = 1,num_players do
 		local player = players[i_player]
@@ -376,17 +527,26 @@ function draw_game(dt)
 			love.graphics.setFont(main_font)
 			love.graphics.print(player.inventory, player.x-8, player.y-16)
 		end
+        if false then
+            local sdf_val = sdf_get_value(obstacle_sdf,player.x/1920,player.y/1080)
+            love.graphics.setFont(main_font)
+            love.graphics.circle("fill",player.x,player.y,3)
+            love.graphics.print(sdf_val,player.x-8,player.y-16)
+            local sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x,player.y)
+            print(string.format("dx: %f, dy:%f", sdf_dx, sdf_dy))
+            love.graphics.line(player.x,player.y,player.x+sdf_dx*100000,player.y+sdf_dy*100000)
+        end
 	end
 	love.graphics.setColor(1,1,1,1)
 
 	for _,pickup in pairs(pickups) do 
-        if pickup then
-            local r = 16
-            local bounce = math.abs(math.sin(pickup.bounce_timer*6))
-            love.graphics.setFont(main_font)
-            love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
-            love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
-        end
+		if pickup then
+			local r = 16
+			local bounce = math.abs(math.sin(pickup.bounce_timer*6))
+			love.graphics.setFont(main_font)
+			love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
+			love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+		end
 	end
 	for _,person in pairs(hungry_people) do 
 		love.graphics.setFont(main_font)
@@ -416,7 +576,7 @@ function draw_game(dt)
 		love.graphics.pop()
 	end
 
-    love.graphics.push()
+	love.graphics.push()
 	love.graphics.translate(1920/2,1080/2)
 	love.graphics.setFont(title_font)
 	if game_countdown > 0 then
@@ -424,16 +584,6 @@ function draw_game(dt)
 	elseif game_countdown > -1 then
 		love.graphics.printf("GO!", -200, -100, 400, "center")
 	end
-    love.graphics.pop()
+	love.graphics.pop()
 
-    local rect_w = 1920/obstacle_w
-    local rect_h = 1080/obstacle_h
-    for y=1,obstacle_h do
-        for x=1,obstacle_w do
-            local v = obstacle_sdf[x+(y-1)*obstacle_w]
-            v = (v + 2)/5
-            love.graphics.setColor(v,v,v,1)
-            love.graphics.rectangle("fill",(x-1)*rect_w,(y-1)*rect_h,rect_w,rect_h)
-        end
-    end
 end

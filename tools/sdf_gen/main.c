@@ -10,22 +10,25 @@ int main(int argc, char **argv)
         int w = 0;
         int h = 0;
         int n = 0;
-        unsigned char *data = stbi_load(argv[1], &w, &h, &n, 3);
-        if(!data){
+        unsigned char *pixels = stbi_load(argv[1], &w, &h, &n, 3);
+        if(!pixels){
             printf("Error, could not load image!\n");
             return -1;
         }
 
+		unsigned char *data = calloc(w*h, 1);
+		for (int i = 0; i < w*h; i++) {
+			data[i] = pixels[i * 3] < 128;
+		}
+
+        stbi_image_free(pixels);
+
         struct SDF sdf;
-        sdf.w = 32;
-        sdf.h = 32;
+        sdf.w = 192;
+        sdf.h = 108;
         sdf.data = calloc(sdf.w*sdf.h,sizeof(float));
         create_sdf(w,h,data,sdf);
 
-        stbi_image_free(data);
-        for(int i=0;i<sdf.w*sdf.h;i++){
-            printf("%f\n",sdf.data[i]);
-        }
 
         //create_sdf
         int file_len = 0;

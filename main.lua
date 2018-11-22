@@ -32,18 +32,18 @@ player_colors = {
 	{1,1,1,1},
 }
 characters = {
-	{name="Greedo"},
+	{name="Greedo", sprite = love.graphics.newImage("Assets/Characters/Takeshi_Portrait.png")},
 	{name="Takeshi", sprite = love.graphics.newImage("Assets/Characters/Takeshi_Portrait.png")},
-	{name="Robot"},
+	{name="Robot", sprite = love.graphics.newImage("Assets/Characters/Takeshi_Portrait.png")},
 }
 num_characters = 3
 
-if true then
+if false then
 	game_state = "title"
-	game_countdown = 3
+	game_countdown_start = 3
 else
 	game_state = "game"
-	game_countdown = 0
+	game_countdown_start = 0
 end
 
 
