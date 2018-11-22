@@ -32,7 +32,8 @@ function reset_game()
 		player.y = 500
 		player.vx = 0
 		player.vy = 0
-		player.angle = math.pi
+		player.steering_angle = math.pi
+		player.movement_angle = math.pi
 		player.speed = 0
 		player.accel = 0
 		player.swap_cooldown = 0
@@ -264,26 +265,36 @@ function check_circles_collision(c1, c2)
 	end
 end
 
-function player_steer(player, target_angle, target_speed_fraction,dt)
-        local max_speed = 400
-        local max_delta_angle = 0.2
-        target_speed = max_speed*target_speed_fraction
-        if target_speed > player.speed then
-            player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
-        else
-            player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
+function player_steer(player, target_angle, target_speed_fraction, drift, dt)
+        local max_speed = 350
+        local max_delta_angle = 0.1
+        delta_angle = target_angle - player.steering_angle
+        while delta_angle > math.pi do
+            delta_angle = delta_angle - math.pi*2
         end
-        if target_speed > 0 then
-            delta_angle = target_angle - player.angle
-            while delta_angle > math.pi do
-                delta_angle = delta_angle - math.pi*2
+        while delta_angle <-math.pi do
+            delta_angle = delta_angle + math.pi*2
+        end
+        delta_angle = delta_angle * (player.speed)/max_speed  
+        delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
+        if drift then
+            player.steering_angle = player.steering_angle + delta_angle * 50* dt
+            player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
+            -- TODO(Vidar):These are frame rate dependent...
+            local t = 0.99
+            player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
+        else
+            target_speed = max_speed*target_speed_fraction
+            if target_speed > player.speed then
+                player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
+            else
+                player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
             end
-            while delta_angle <-math.pi do
-                delta_angle = delta_angle + math.pi*2
+            if target_speed > 0 then
+                player.steering_angle = player.steering_angle + delta_angle * 40* dt
+                local t = 0.8
+                player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
             end
-            delta_angle = delta_angle * (player.speed)/max_speed  
-            delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
-            player.angle = player.angle + delta_angle * 40* dt
         end
         return player
 end
@@ -296,6 +307,7 @@ function update_game(dt)
 			local target_angle = 0
             local dx = 0
             local dy = 0
+            local drift = false
 			if player.input_keys then
                 local target_angles = {}
 				if love.keyboard.isDown(player.input_keys.up) then
@@ -310,6 +322,9 @@ function update_game(dt)
 				if love.keyboard.isDown(player.input_keys.right) then
                     dx = 1
 				end
+				if love.keyboard.isDown(player.input_keys.drift) then
+                    drift = true
+				end
 			elseif player.input_joystick then
                 dx = player.input_joystick:getGamepadAxis("leftx")
                 dy = player.input_joystick:getGamepadAxis("lefty")
@@ -319,10 +334,10 @@ function update_game(dt)
                 target_speed = 1
             end
 
-            player = player_steer(player,target_angle, target_speed,dt)
+            player = player_steer(player,target_angle, target_speed, drift, dt)
 
-			local cos_angle = math.cos(player.angle)
-			local sin_angle = math.sin(player.angle)
+			local cos_angle = math.cos(player.movement_angle)
+			local sin_angle = math.sin(player.movement_angle)
 
 			player.vx = player.vx * math.pow(0.001,dt)
 			player.vy = player.vy * math.pow(0.001,dt)
@@ -523,7 +538,7 @@ function draw_game(dt)
 	for i_player = 1,num_players do
 		local player = players[i_player]
 		love.graphics.setColor(player.color)
-		local sprite_index = math.mod(-player.angle*16/math.pi/2, 16)
+		local sprite_index = math.mod(-player.steering_angle*16/math.pi/2, 16)
 		sprite_index = math.floor(sprite_index+8.5)
 		while sprite_index < 0 do
 			sprite_index = sprite_index + 16

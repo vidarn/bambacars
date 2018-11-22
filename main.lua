@@ -14,14 +14,16 @@ input_keys = {
 		down = "down",
 		left = "left",
 		right = "right",
-		accept = "return"
+		accept = "space",
+		drift = "space"
 	},
 	{
 		up = "w",
 		left = "a",
 		down = "s",
 		right = "d",
-		accept = "space"
+		accept = "return",
+		drift = "e"
 	}
 }
 player_colors = {
