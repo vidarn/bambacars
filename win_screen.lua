@@ -22,14 +22,14 @@ end
 
 function keypressed_win(key)
     if win_cooldown < 0 then
-        game_state = "game"
+        switch_to_state("game")
         win_cooldown = 0.5
     end
 end
 
 function gamepadpressed_win(gamepad,button)
     if win_cooldown < 0 then
-        game_state = "game"
+        switch_to_state("game")
         win_cooldown = 0.5
     end
 end

@@ -169,7 +169,6 @@ function draw_character_select()
 			end
 
 			love.graphics.scale(math.abs(flip_t),1)
-			--card_shader:send("flip_t",flip_t)
 			card_shader:send("line_t",line_t)
 
 			love.graphics.translate(-rect_w/2,0)

@@ -4,6 +4,7 @@ require("title_screen")
 require("game")
 require("character_select")
 require("win_screen")
+require("easing")
 
 local transition_pixelcode = [[
 uniform float transition_t;

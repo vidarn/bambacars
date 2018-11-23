@@ -19,15 +19,18 @@ function reset_game()
 	hungry_people = { }
 	hungry_people_spawn_queue = { }
 	hungry_people_locations = {
-		{x= 600, y =200},
-		{x= 1200, y =800},
-		{x= 400, y =200},
-		{x= 1500, y =300},
+		{x= 1000, y =418},
+		{x= 1200, y =400},
+		{x= 873, y =407},
+		{x= 170, y =636},
+		{x= 1373, y =389},
 	}
 	food_spawn_points = {
-		{name="pizza",x=100,y=200},
-		{name="hot dog",x=700,y=900},
-		{name="ice cream",x=500,y=700},
+		{name="hamburger",x=345,y=880},
+		{name="pizza",x=1802,y=670},
+		{name="hot dog",x=484,y=427},
+		{name="ice cream",x=982,y=900},
+		{name="sushi",x=1644,y=264},
 	}
 	for i,player in pairs(active_players) do
 		player.x = 700 - 100*i
@@ -208,12 +211,15 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 			if math.abs(dot_t) > 0.2 then
 				print("glance")
 				hit = false
-				x1 = x1 + nx*1/1920
-				y1 = y1 + ny*1/980
+				--x1 = x1 + nx*1/1920
+				--y1 = y1 + ny*1/980
 			end
 			friction = 1 - math.abs(dot_t)
-			x1 = x1 + tx*(d*(1-t))*dot_t 
-			y1 = y1 + ty*(d*(1-t))*dot_t
+			dx = tx*(d*(1-t))*dot_t 
+			dy = ty*(d*(1-t))*dot_t
+            t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
+            x1 = x1+dx*t
+            y1 = y1+dy*t
 		end
 		return x1*1920,y1*980,friction,-nx,-ny
 	else
@@ -297,7 +303,7 @@ function player_steer(player, target_angle, target_speed_fraction, drift, dt)
 		player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
 		-- TODO(Vidar):These are frame rate dependent...
 		local t = 0.95
-		player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
+		--player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
 	else
 		target_speed = max_speed*target_speed_fraction
 		if target_speed > player.speed then
@@ -469,7 +475,7 @@ function update_game(dt)
 				local c2 = {
 					start_x = person.x, end_x = person.x,
 					start_y = person.y, end_y = person.y,
-					vx = 0, vy = 0, r = 16
+					vx = 0, vy = 0, r = 48
 				}
 				local ret = check_circles_collision(c1,c2)
 				if ret and player.inventory == person.wants then
@@ -495,16 +501,16 @@ function update_game(dt)
 				player.x = player.x - 1920
 			end
 			while player.y < 0 do
-				player.y = player.y + 1080
+				player.y = player.y + 980
 			end
-			while player.y > 1080 do
-				player.y = player.y - 1080
+			while player.y > 980 do
+				player.y = player.y - 980
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
 			if player.score >= 3 then
 				winning_player = player
 				print("Player "..i.." wins!")
-				game_state = "win"
+				switch_to_state("win")
 				reset_game()
 			end
 		end
@@ -637,8 +643,16 @@ function draw_game(dt)
 	else
 		local n = math.ceil(game_countdown) + 1
 		local s = splash_numbers[n]
+        local f = game_countdown - n + 2
 		if s then
+            love.graphics.push()
+            love.graphics.translate(1920/2,1080/2)
+            local scale = ElasticEaseOut(1-f)
+            love.graphics.scale(scale,scale)
+            love.graphics.translate(-1920/2,-1080/2)
+            --print(string.format("%f %f",n,f))
 			love.graphics.draw(s,0,0)
+            love.graphics.pop()
 		end
 	end
 
