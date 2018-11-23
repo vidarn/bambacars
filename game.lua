@@ -67,6 +67,7 @@ end
 function load_game()
 	reset_game()
 	bkg_image = love.graphics.newImage("Assets/City/townmap_04.jpg")
+    speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
 	local obst_data = love.filesystem.read("string", "Assets/City/townmap_04_sdf.sdf")
 	local w, h, pos = love.data.unpack("=ii",obst_data)
 	print(string.format("w: %f, h: %f, pos: %d",w,h,pos))
@@ -303,7 +304,7 @@ function player_steer(player, target_angle, target_speed_fraction, drift, dt)
 		player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
 		-- TODO(Vidar):These are frame rate dependent...
 		local t = 0.95
-		--player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
+		player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
 	else
 		target_speed = max_speed*target_speed_fraction
 		if target_speed > player.speed then
@@ -467,6 +468,7 @@ function update_game(dt)
 			end
 			to_delete = {}
 			for j,person in pairs(hungry_people) do
+                person.anim_t = person.anim_t+dt*1
 				local c1 = {
 					start_x = player.x, end_x = post_pos_player.x,
 					start_y = player.y, end_y = post_pos_player.y,
@@ -524,6 +526,8 @@ function update_game(dt)
 				for j=1,999 do
 					if hungry_people[j] == nil then
 						hungry_people[j] = person
+                        person.intro_anim_t = 0
+                        person.anim_t = 0
 						break
 					end
 				end
@@ -537,6 +541,9 @@ function update_game(dt)
 			food_spawn_cooldown = math.random()*4+0.3
 		end
 		food_spawn_cooldown = food_spawn_cooldown - dt
+        for j,person in pairs(hungry_people) do
+            person.intro_anim_t = math.min(person.intro_anim_t+dt*1.5,1.0)
+        end
 	end
 	game_countdown = game_countdown - dt
 end
@@ -601,8 +608,20 @@ function draw_game(dt)
 	end
 	for _,person in pairs(hungry_people) do 
 		love.graphics.setFont(main_font)
-		love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
-		love.graphics.circle("fill",person.x,person.y,2)
+        if true then
+            love.graphics.push()
+            love.graphics.translate(person.x,person.y)
+            love.graphics.scale(ElasticEaseOut(person.intro_anim_t))
+            love.graphics.scale(math.abs(math.sin(person.anim_t*2))*0.1+0.95)
+            love.graphics.draw(speech_bubble,-170,-180)
+            love.graphics.setColor(0,0,0,1)
+            love.graphics.print(person.wants,-100,-100)
+            love.graphics.setColor(1,1,1,1)
+            love.graphics.pop()
+        else
+            love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
+            love.graphics.circle("fill",person.x,person.y,2)
+        end
 	end
 	love.graphics.pop()
 
