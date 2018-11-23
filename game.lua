@@ -146,80 +146,84 @@ function sdf_get_value(sdf,x,y)
 end
 
 function sdf_get_gradient(sdf,x,y)
-    local delta = 0.001
-    local dx = (sdf_get_value(sdf,x+delta,y) - sdf_get_value(sdf,x-delta,y))/delta
-    local dy = (sdf_get_value(sdf,x,y+delta) - sdf_get_value(sdf,x,y-delta))/delta
-    return dx,dy
+	local delta = 0.001
+	local dx = (sdf_get_value(sdf,x+delta,y) - sdf_get_value(sdf,x-delta,y))/delta
+	local dy = (sdf_get_value(sdf,x,y+delta) - sdf_get_value(sdf,x,y-delta))/delta
+	return dx,dy
 end
 
 function sdf_trace(x,y,dx,dy,max_d,sdf,sign)
-    local num_steps = 100
-    local dd = max_d/num_steps
-    local d = dd
-    for i=1,num_steps do
-        local sdf_dist = sdf_get_value(sdf,x+dx*d,y+dy*d)
-        if sdf_dist*sign < 0 then
-            --TODO(Vidar):We can be more precise...
-            return d - dd/2,true
-        end
-        d = d + dd
-    end
-    return d,false
+	local num_steps = 100
+	local dd = max_d/num_steps
+	local d = dd
+	for i=1,num_steps do
+		local sdf_dist = sdf_get_value(sdf,x+dx*d,y+dy*d)
+		if sdf_dist*sign < 0 then
+			--TODO(Vidar):We can be more precise...
+			return d - dd/2,true
+		end
+		d = d + dd
+	end
+	return d,false
 end
 
 function collide_sdf(x1, x2, y1, y2,sdf)
-    x1 = x1/1920
-    x2 = x2/1920
-    y1 = y1/980
-    y2 = y2/980
-    local dx = x2 - x1
-    local dy = y2 - y1
-    local d = math.sqrt(dx*dx + dy*dy)
-    local sdf_dist = sdf_get_value(sdf,x1,y1)
+	x1 = x1/1920
+	x2 = x2/1920
+	y1 = y1/980
+	y2 = y2/980
+	local dx = x2 - x1
+	local dy = y2 - y1
+	local d = math.sqrt(dx*dx + dy*dy)
+	local sdf_dist = sdf_get_value(sdf,x1,y1)
 
-    if sdf_dist >= 0 then
-        local nx = 0
-        local ny = 0
-        t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
-        x1 = x1+dx*t
-        y1 = y1+dy*t
-        nx,ny = sdf_get_gradient(sdf,x1,y1)
-        local n = math.sqrt(nx*nx + ny*ny)
-        if n == 0 then
-            nx = 1
-            ny = 0
-            n = 1
-        end
-        nx = nx/n
-        ny = ny/n
-        if hit then
-            tx = -ny
-            ty = nx
-            local dot_t = dx/d*tx + dy/d*ty
-            if math.abs(dot_t) > 0.2 then
-                print("glance")
-                hit = false
-                x1 = x1 + nx*1/1920
-                y1 = y1 + ny*1/980
-            end
-            x1 = x1 + tx*(d*(1-t))*dot_t 
-            y1 = y1 + ty*(d*(1-t))*dot_t
-        end
-        return x1*1920,y1*980,hit,-nx,-ny
-    else
-        print("inside")
-        local gx,gy = sdf_get_gradient(sdf,x1,y1)
-        local n = math.sqrt(gx*gx + gy*gy)
-        if n == 0 then
-            gx = 1
-            gy = 0
-            n = 1
-        end
-        gx = gx/n
-        gy = gy/n
-        d, hit = sdf_trace(x1,y1,gx,gy,30/1920,sdf,-1)
-        return (x1 + gx*d)*1920, (y1 + gy*d)*980,hit,gx,gy
-    end
+	if sdf_dist >= 0 then
+		local nx = 0
+		local ny = 0
+		t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
+		x1 = x1+dx*t
+		y1 = y1+dy*t
+		nx,ny = sdf_get_gradient(sdf,x1,y1)
+		local n = math.sqrt(nx*nx + ny*ny)
+		if n == 0 then
+			nx = 1
+			ny = 0
+			n = 1
+		end
+		nx = nx/n
+		ny = ny/n
+		local friction = 0
+		if hit then
+			tx = -ny
+			ty = nx
+			local dot_t = dx/d*tx + dy/d*ty
+			if math.abs(dot_t) > 0.2 then
+				print("glance")
+				hit = false
+				x1 = x1 + nx*1/1920
+				y1 = y1 + ny*1/980
+			end
+			friction = 1 - math.abs(dot_t)
+			x1 = x1 + tx*(d*(1-t))*dot_t 
+			y1 = y1 + ty*(d*(1-t))*dot_t
+		end
+		return x1*1920,y1*980,friction,-nx,-ny
+	else
+		print("inside")
+		local gx,gy = sdf_get_gradient(sdf,x1,y1)
+		local n = math.sqrt(gx*gx + gy*gy)
+		if n == 0 then
+			gx = 1
+			gy = 0
+			n = 1
+		end
+		gx = gx/n
+		gy = gy/n
+		d, hit = sdf_trace(x1,y1,gx,gy,30/1920,sdf,-1)
+		local friction = 0
+		if hit then friction = 1 end
+		return (x1 + gx*d)*1920, (y1 + gy*d)*980,friction,gx,gy
+	end
 end
 
 function check_circles_collision(c1, c2)
@@ -266,37 +270,40 @@ function check_circles_collision(c1, c2)
 end
 
 function player_steer(player, target_angle, target_speed_fraction, drift, dt)
-        local max_speed = 350
-        local max_delta_angle = 0.1
-        delta_angle = target_angle - player.steering_angle
-        while delta_angle > math.pi do
-            delta_angle = delta_angle - math.pi*2
-        end
-        while delta_angle <-math.pi do
-            delta_angle = delta_angle + math.pi*2
-        end
-        delta_angle = delta_angle * (player.speed)/max_speed  
-        delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
-        if drift then
-            player.steering_angle = player.steering_angle + delta_angle * 50* dt
-            player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
-            -- TODO(Vidar):These are frame rate dependent...
-            local t = 0.99
-            player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
-        else
-            target_speed = max_speed*target_speed_fraction
-            if target_speed > player.speed then
-                player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
-            else
-                player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
-            end
-            if target_speed > 0 then
-                player.steering_angle = player.steering_angle + delta_angle * 40* dt
-                local t = 0.8
-                player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
-            end
-        end
-        return player
+	local max_speed = 350
+	local max_delta_angle = 0.15
+	if drift then
+		max_delta_angle = 0.2
+	end
+	delta_angle = target_angle - player.steering_angle
+	while delta_angle > math.pi do
+		delta_angle = delta_angle - math.pi*2
+	end
+	while delta_angle <-math.pi do
+		delta_angle = delta_angle + math.pi*2
+	end
+	--delta_angle = delta_angle * (player.speed)/max_speed  
+	delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
+	if drift then
+		player.steering_angle = player.steering_angle + delta_angle * 50* dt
+		player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
+		-- TODO(Vidar):These are frame rate dependent...
+		local t = 0.95
+		player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
+	else
+		target_speed = max_speed*target_speed_fraction
+		if target_speed > player.speed then
+			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
+		else
+			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
+		end
+		if target_speed > 0 then
+			player.steering_angle = player.steering_angle + delta_angle * 40* dt
+			local t = 0.8
+			player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
+		end
+	end
+	return player
 end
 
 function update_game(dt)
@@ -305,36 +312,43 @@ function update_game(dt)
 		for i,player in pairs(players) do
 			local target_speed = 0
 			local target_angle = 0
-            local dx = 0
-            local dy = 0
-            local drift = false
+			local dx = 0
+			local dy = 0
+			local drift = false
 			if player.input_keys then
-                local target_angles = {}
+				local target_angles = {}
 				if love.keyboard.isDown(player.input_keys.up) then
-                    dy = -1
+					dy = -1
+					target_speed = 1
 				end
 				if love.keyboard.isDown(player.input_keys.down) then
-                    dy = 1
+					dy = 1
+					target_speed = 1
 				end
 				if love.keyboard.isDown(player.input_keys.left) then
-                    dx = -1
+					dx = -1
+					target_speed = 1
 				end
 				if love.keyboard.isDown(player.input_keys.right) then
-                    dx = 1
+					dx = 1
+					target_speed = 1
 				end
 				if love.keyboard.isDown(player.input_keys.drift) then
-                    drift = true
+					drift = true
 				end
 			elseif player.input_joystick then
-                dx = player.input_joystick:getGamepadAxis("leftx")
-                dy = player.input_joystick:getGamepadAxis("lefty")
+				dx = player.input_joystick:getGamepadAxis("leftx")
+				dy = player.input_joystick:getGamepadAxis("lefty")
+				drift = player.input_joystick:isGamepadDown("a")
+				target_speed = player.input_joystick:getGamepadAxis("triggerright")
 			end
-            if dx ~= 0 or dy ~= 0 then
-                target_angle = math.atan2(dy,dx)
-                target_speed = 1
-            end
+			if math.abs(dx) > 0.1 or math.abs(dy) > 0.1 then
+				target_angle = math.atan2(dy,dx)
+			else
+				target_angle = player.movement_angle
+			end
 
-            player = player_steer(player,target_angle, target_speed, drift, dt)
+			player = player_steer(player,target_angle, target_speed, drift, dt)
 
 			local cos_angle = math.cos(player.movement_angle)
 			local sin_angle = math.sin(player.movement_angle)
@@ -396,16 +410,16 @@ function update_game(dt)
 					end
 				end
 			end
-            post_collision_players_pos[i].x, post_collision_players_pos[i].y,
-                hit, nx, ny = 
-                collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y,obstacle_sdf)
-            if hit then
-                print("HIT!")
-                player.vx = nx*100
-                player.vy = ny*100
-                player.speed = 0
-                player.accel = 0
-            end
+			post_collision_players_pos[i].x, post_collision_players_pos[i].y,
+				friction, nx, ny = 
+				collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y,obstacle_sdf)
+			player.speed = player.speed*(1-friction)
+			player.accel = player.accel*(1-friction)
+			if friction > 0.2 then
+				print("HIT!")
+				player.vx = nx*100
+				player.vy = ny*100
+			end
 		end
 		for i,player in pairs(players) do
 			local post_pos_player = post_collision_players_pos[i]
@@ -514,7 +528,7 @@ function update_game(dt)
 end
 
 function draw_game(dt)
-    love.graphics.push()
+	love.graphics.push()
 	love.graphics.translate(0,100)
 	love.graphics.setColor(1,1,1,1)
 	love.graphics.draw(bkg_image)
@@ -527,10 +541,10 @@ function draw_game(dt)
 			for x=1,obstacle_sdf.w do
 				local v = obstacle_sdf[x+(y-1)*obstacle_sdf.w]
 				--v = (v)/2
-                if v < 0 then
-                    love.graphics.setColor(v,v,v,1)
-                    love.graphics.rectangle("fill",(x-1)*rect_w,(y-1)*rect_h,rect_w,rect_h)
-                end
+				if v < 0 then
+					love.graphics.setColor(v,v,v,1)
+					love.graphics.rectangle("fill",(x-1)*rect_w,(y-1)*rect_h,rect_w,rect_h)
+				end
 			end
 		end
 	end
@@ -551,15 +565,15 @@ function draw_game(dt)
 			love.graphics.setFont(main_font)
 			love.graphics.print(player.inventory, player.x-8, player.y-16)
 		end
-        if false then
-            local sdf_val = sdf_get_value(obstacle_sdf,player.x/1920,player.y/1080)
-            love.graphics.setFont(main_font)
-            love.graphics.circle("fill",player.x,player.y,3)
-            love.graphics.print(sdf_val,player.x-8,player.y-16)
-            local sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x,player.y)
-            print(string.format("dx: %f, dy:%f", sdf_dx, sdf_dy))
-            love.graphics.line(player.x,player.y,player.x+sdf_dx*100000,player.y+sdf_dy*100000)
-        end
+		if false then
+			local sdf_val = sdf_get_value(obstacle_sdf,player.x/1920,player.y/1080)
+			love.graphics.setFont(main_font)
+			love.graphics.circle("fill",player.x,player.y,3)
+			love.graphics.print(sdf_val,player.x-8,player.y-16)
+			local sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x,player.y)
+			print(string.format("dx: %f, dy:%f", sdf_dx, sdf_dy))
+			love.graphics.line(player.x,player.y,player.x+sdf_dx*100000,player.y+sdf_dy*100000)
+		end
 	end
 	love.graphics.setColor(1,1,1,1)
 
@@ -577,10 +591,10 @@ function draw_game(dt)
 		love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
 		love.graphics.circle("fill",person.x,person.y,2)
 	end
-    love.graphics.pop()
+	love.graphics.pop()
 
-    love.graphics.setColor(0,0,0,1)
-    love.graphics.rectangle('fill',0,0, 1920,100)
+	love.graphics.setColor(0,0,0,1)
+	love.graphics.rectangle('fill',0,0, 1920,100)
 
 	for i_player = 1,num_players do
 		local player = players[i_player]

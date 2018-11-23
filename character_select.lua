@@ -54,7 +54,7 @@ function update_character_select(dt)
 		end
 	end
 	if all_done and num_players >1 then
-		game_state = "game"
+		switch_to_state("game")
         for i,player in pairs(players) do
             player.done = false
         end
@@ -63,7 +63,7 @@ end
 
 function keypressed_character_select(key)
 	if key == "escape" then
-		game_state = "game"
+		switch_to_state("game")
 		print("blajj")
 	end
 	for i,player in pairs(players) do 
@@ -126,6 +126,9 @@ function love.gamepadpressed(gamepad, button)
 end
 
 function draw_character_select()
+	love.graphics.setColor(0,0,0,1)
+	love.graphics.rectangle('fill',0,0,1920,1080)
+	love.graphics.setColor(1,1,1,1)
 	local rect_w = 512
 	local rect_h = 512
 	local rect_spacing_x = 80

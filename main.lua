@@ -5,6 +5,29 @@ require("game")
 require("character_select")
 require("win_screen")
 
+local transition_pixelcode = [[
+uniform float transition_t;
+vec4 effect( vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords )
+{
+	const vec4 one = vec4(1.f,1.f,1.f,1.f);
+	float f = texture_coords.x+texture_coords.y;
+	float a = step(transition_t,f);
+	float a2 = step(transition_t+0.3,f);
+	vec4 c = Texel(texture, texture_coords) * color;
+	c = mix(one,c,a2);
+	vec4 texcolor = a*c;
+	return texcolor;
+}
+]]
+
+local transition_vertexcode = [[
+vec4 position( mat4 transform_projection, vec4 vertex_position )
+{
+	vec4 p = transform_projection * vertex_position;
+	return p;
+}
+]] 
+
 joysticks = {}
 num_players = 2
 players = {}
@@ -40,12 +63,20 @@ characters = {
 }
 num_characters = 3
 
-if false then
+if true then
 	game_state = "title"
 	game_countdown_start = 3
 else
 	game_state = "character_select"
-	game_countdown_start = 0
+	game_countdown_start = 3
+end
+
+local transition_t = 4
+
+function switch_to_state(state_name)
+	prev_state_canvas:renderTo(main_draw)
+	game_state = state_name
+	transition_t = 0
 end
 
 
@@ -59,6 +90,8 @@ end
 
 
 function love.load(arg)
+	prev_state_canvas = love.graphics.newCanvas()
+	transition_shader = love.graphics.newShader(transition_pixelcode,transition_vertexcode)
 	print("Load!")
 	num_keyboard_players = num_players
 	title_font = love.graphics.newFont("Assets/Fonts/Asap-SemiBold.ttf",120)
@@ -91,21 +124,37 @@ function love.load(arg)
 end
 
 function love.update(dt)
-	if game_state == "title" then
-		update_title(dt)
-	end
-	if game_state == "game" then
-		update_game(dt)
-	end
-	if game_state == "character_select" then
-		update_character_select(dt)
-	end
-	if game_state == "win" then
-		update_win(dt)
+	if transition_t > 2 then 
+		if game_state == "title" then
+			update_title(dt)
+		end
+		if game_state == "game" then
+			update_game(dt)
+		end
+		if game_state == "character_select" then
+			update_character_select(dt)
+		end
+		if game_state == "win" then
+			update_win(dt)
+		end
+	else
+		transition_t = transition_t + dt*4
 	end
 end
 
 function love.draw()
+	--love.graphics.setBlendMode("alpha")
+	main_draw()
+	--love.graphics.setBlendMode("replace")
+	if transition_t < 2 then
+	love.graphics.setShader(transition_shader)
+	transition_shader:send("transition_t",transition_t)
+	love.graphics.draw(prev_state_canvas,0,0)
+	love.graphics.setShader()
+	end
+end
+
+function main_draw()
 	love.graphics.push()
     local width, height = love.graphics.getDimensions()
     local xscale = width/1920
