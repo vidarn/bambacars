@@ -55,6 +55,7 @@ function update_character_select(dt)
 	end
 	if all_done and num_players >1 then
 		switch_to_state("game")
+		reset_game()
         for i,player in pairs(players) do
             player.done = false
         end
@@ -62,10 +63,6 @@ function update_character_select(dt)
 end
 
 function keypressed_character_select(key)
-	if key == "escape" then
-		switch_to_state("game")
-		print("blajj")
-	end
 	for i,player in pairs(players) do 
 		if player.input_keys then 
 			for action,k in pairs(player.input_keys) do
@@ -74,22 +71,24 @@ function keypressed_character_select(key)
 						if not player.done then 
 							if action == "left" then 
 								player.character_index = player.character_index - 1
-								card_flip_anim[i] = 1.0
+								card_flip_anim[player.index] = 1.0
 							end
 							if action == "right" then 
 								player.character_index = player.character_index + 1
-								card_flip_anim[i] = 1.0
+								card_flip_anim[player.index] = 1.0
 							end
 							if action == "accept" then 
 								player.done = true
-								card_done_anim[i] = 1.0
+								card_done_anim[player.index] = 1.0
 							end
 							if player.character_index < 1 then player.character_index = num_characters end
 							if player.character_index > num_characters then player.character_index = 1 end
 						end
 					else
-						card_flip_anim[i] = 1.0
 						player.active = true
+						table.insert(active_players,player)
+						player.index = #active_players
+						card_flip_anim[player.index] = 1.0
 					end
 				end
 			end
@@ -97,28 +96,30 @@ function keypressed_character_select(key)
 	end
 end
 
-function love.gamepadpressed(gamepad, button)
+function gamepadpressed_character_select(gamepad, button)
 	for i,player in pairs(players) do 
 		if player.input_joystick and player.input_joystick == gamepad then 
 			if not player.done then 
 				if player.active then 
 					if button == "dpleft" then 
 						player.character_index = player.character_index - 1
-						card_flip_anim[i] = 1.0
+						card_flip_anim[player.index] = 1.0
 					end
 					if button == "dpright" then 
 						player.character_index = player.character_index + 1
-						card_flip_anim[i] = 1.0
+						card_flip_anim[player.index] = 1.0
 					end
 					if button == "a" then 
 						player.done = true
-						card_done_anim[i] = 1.0
+						card_done_anim[player.index] = 1.0
 					end
 					if player.character_index < 1 then player.character_index = num_characters end
 					if player.character_index > num_characters then player.character_index = 1 end
 				else
-					card_flip_anim[i] = 1.0
 					player.active = true
+					table.insert(active_players,player)
+					player.index = #active_players
+					card_flip_anim[player.index] = 1.0
 				end
 			end
 		end
@@ -142,7 +143,7 @@ function draw_character_select()
 	local i = 1
 	for r=1,rows do
 		for c=1,cols do
-			local player = players[i]
+			local player = active_players[i]
 			local col = {0.2,0.2,0.2,1}
 			local character = nil
 			if player and player.active then

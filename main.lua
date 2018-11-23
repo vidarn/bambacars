@@ -13,7 +13,7 @@ vec4 effect( vec4 color, Image texture, vec2 texture_coords, vec2 screen_coords 
 	float f = texture_coords.x+texture_coords.y;
 	float a = step(transition_t,f);
 	float a2 = step(transition_t+0.3,f);
-	vec4 c = Texel(texture, texture_coords) * color;
+	vec4 c = Texel(texture, texture_coords);
 	c = mix(one,c,a2);
 	vec4 texcolor = a*c;
 	return texcolor;
@@ -31,6 +31,7 @@ vec4 position( mat4 transform_projection, vec4 vertex_position )
 joysticks = {}
 num_players = 2
 players = {}
+active_players = {}
 input_keys = {
 	{
 		up = "up",
@@ -138,7 +139,7 @@ function love.update(dt)
 			update_win(dt)
 		end
 	else
-		transition_t = transition_t + dt*4
+		transition_t = transition_t + dt*6
 	end
 end
 
@@ -190,5 +191,17 @@ function love.keypressed(key)
 	end
 	if game_state == "win" then
 		keypressed_win(key)
+	end
+end
+
+function love.gamepadpressed( gamepad, button )
+	if game_state == "character_select" then
+		gamepadpressed_character_select(gamepad,button)
+	end
+	if game_state == "title" then
+		gamepadpressed_title(gamepad,button)
+	end
+	if game_state == "win" then
+		gamepadpressed_win(gamepad,button)
 	end
 end

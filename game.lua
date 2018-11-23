@@ -9,6 +9,8 @@ local hungry_people_locations = { }
 
 local food_spawn_points = { }
 local num_active_food = 0
+local splash_numbers = {
+}
 
 function reset_game()
 	game_countdown = game_countdown_start
@@ -27,7 +29,7 @@ function reset_game()
 		{name="hot dog",x=700,y=900},
 		{name="ice cream",x=500,y=700},
 	}
-	for i,player in pairs(players) do
+	for i,player in pairs(active_players) do
 		player.x = 700 - 100*i
 		player.y = 500
 		player.vx = 0
@@ -71,6 +73,12 @@ function load_game()
 	end
 	obstacle_sdf.w = w
 	obstacle_sdf.h = h
+	splash_numbers = {
+		love.graphics.newImage("Assets/Splash_Screen/GO_v01.png"),
+		love.graphics.newImage("Assets/Splash_Screen/One_v01.png"),
+		love.graphics.newImage("Assets/Splash_Screen/Two_v01.png"),
+		love.graphics.newImage("Assets/Splash_Screen/Three_v01.png"),
+	}
 end
 
 
@@ -309,7 +317,7 @@ end
 function update_game(dt)
 	if game_countdown < 0 then 
 		local pre_collision_players_pos = {}
-		for i,player in pairs(players) do
+		for i,player in pairs(active_players) do
 			local target_speed = 0
 			local target_angle = 0
 			local dx = 0
@@ -370,14 +378,14 @@ function update_game(dt)
 
 		local post_collision_players_pos = {}
 
-		for i,player in pairs(players) do
+		for i,player in pairs(active_players) do
 			local pre_pos_player = pre_collision_players_pos[i]
 			post_collision_players_pos[i]= {
 				x = pre_pos_player.x,
 				y = pre_pos_player.y
 			}
 			-- Player <-> Player collision
-			for j,other_player in pairs(players) do
+			for j,other_player in pairs(active_players) do
 				if j ~= i then
 					local pre_pos_other_player = pre_collision_players_pos[j]
 					local c1 = {
@@ -421,7 +429,7 @@ function update_game(dt)
 				player.vy = ny*100
 			end
 		end
-		for i,player in pairs(players) do
+		for i,player in pairs(active_players) do
 			local post_pos_player = post_collision_players_pos[i]
 			local to_delete = {}
 			for j,pickup in pairs(pickups) do
@@ -477,7 +485,7 @@ function update_game(dt)
 				hungry_people[j] = nil
 			end
 		end
-		for i,player in pairs(players) do
+		for i,player in pairs(active_players) do
 			player.x = post_collision_players_pos[i].x
 			player.y = post_collision_players_pos[i].y
 			while player.x < 0 do
@@ -549,8 +557,7 @@ function draw_game(dt)
 		end
 	end
 
-	for i_player = 1,num_players do
-		local player = players[i_player]
+	for i_player,player in pairs(active_players) do
 		love.graphics.setColor(player.color)
 		local sprite_index = math.mod(-player.steering_angle*16/math.pi/2, 16)
 		sprite_index = math.floor(sprite_index+8.5)
@@ -596,8 +603,7 @@ function draw_game(dt)
 	love.graphics.setColor(0,0,0,1)
 	love.graphics.rectangle('fill',0,0, 1920,100)
 
-	for i_player = 1,num_players do
-		local player = players[i_player]
+	for i_player,player in pairs(active_players) do
 		local character = characters[player.character_index]
 		love.graphics.setColor(1,1,1,1)
 		love.graphics.push()
@@ -618,14 +624,22 @@ function draw_game(dt)
 		love.graphics.pop()
 	end
 
-	love.graphics.push()
-	love.graphics.translate(1920/2,1080/2)
-	love.graphics.setFont(title_font)
-	if game_countdown > 0 then
-		love.graphics.printf(math.ceil(game_countdown), -200, -100, 400, "center")
-	elseif game_countdown > -1 then
-		love.graphics.printf("GO!", -200, -100, 400, "center")
+	if false then 
+		love.graphics.push()
+		love.graphics.translate(1920/2,1080/2)
+		love.graphics.setFont(title_font)
+		love.graphics.pop()
+		if game_countdown > 0 then
+			love.graphics.printf(math.ceil(game_countdown), -200, -100, 400, "center")
+		elseif game_countdown > -1 then
+			love.graphics.printf("GO!", -200, -100, 400, "center")
+		end
+	else
+		local n = math.ceil(game_countdown) + 1
+		local s = splash_numbers[n]
+		if s then
+			love.graphics.draw(s,0,0)
+		end
 	end
-	love.graphics.pop()
 
 end
