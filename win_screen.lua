@@ -9,14 +9,15 @@ end
 
 function draw_win()
     local  character = characters[winning_player.character_index]
+    love.graphics.setColor(character.color)
+    love.graphics.rectangle('fill',0,0,1920,1080)
+    love.graphics.setColor(1,1,1,1)
 	love.graphics.translate(1920/2,1080/2-100)
 	love.graphics.setFont(title_font)
 	local w = 1024
-    love.graphics.printf("Winner!",-w/2,0,w, "center")
+    love.graphics.printf(string.format("Player %d won!",winning_player.index),-w/2,0,w, "center")
     if character and character.sprite then
         love.graphics.draw(character.sprite)
-    else
-        love.graphics.rectangle("fill",0, 0, 512, 512)
     end
 end
 

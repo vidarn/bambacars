@@ -26,15 +26,28 @@ function reset_game()
 		{x= 1373, y =389},
 	}
 	food_spawn_points = {
-		{name="hamburger",x=345,y=880},
-		{name="pizza",x=1802,y=670},
-		{name="hot dog",x=484,y=427},
-		{name="ice cream",x=982,y=900},
-		{name="sushi",x=1644,y=264},
+		{name="Hamburger",x=345,y=880},
+		{name="Pizza",x=1802,y=670},
+		{name="HotDog",x=484,y=427},
+		{name="IceCream",x=982,y=900},
+		{name="Shrimp",x=1644,y=264},
 	}
+    local start_positions = {
+        {x=344,y=484},
+        {x=1100,y=222},
+        {x=1674,y=122},
+        {x=344,y=752},
+        {x=1100,y=626},
+        {x=1706,y=708},
+    }
+    num_active_food =0
+    for i,fsp in pairs(food_spawn_points) do 
+        local sprite_file = "Assets/Food/"..fsp.name..".png"
+        fsp.sprite = love.graphics.newImage(sprite_file)
+    end
 	for i,player in pairs(active_players) do
-		player.x = 700 - 100*i
-		player.y = 500
+		player.x = start_positions[i].x
+		player.y = start_positions[i].y
 		player.vx = 0
 		player.vy = 0
 		player.steering_angle = math.pi
@@ -42,7 +55,8 @@ function reset_game()
 		player.speed = 0
 		player.accel = 0
 		player.swap_cooldown = 0
-		player.score = 0
+		player.score = {}
+        player.inventory = nil
 		player.sprite = {
 			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0000.png"),
 			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0001.png"),
@@ -70,7 +84,6 @@ function load_game()
     speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
 	local obst_data = love.filesystem.read("string", "Assets/City/townmap_04_sdf.sdf")
 	local w, h, pos = love.data.unpack("=ii",obst_data)
-	print(string.format("w: %f, h: %f, pos: %d",w,h,pos))
 	obstacle_sdf = {}
 	for i=1,w*h do 
 		obstacle_sdf[i],pos = love.data.unpack("f",obst_data,pos)
@@ -115,7 +128,7 @@ function spawn_food()
 			local r2 = math.random(#hungry_people_locations)
 			local hungry_people_location = hungry_people_locations[r2]
 			table.remove(hungry_people_locations,r2)
-			local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name}
+			local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name, sprite = pickups[i].sprite}
 			hungry_person.spawn_cooldown = 0.7
 			table.insert(hungry_people_spawn_queue, hungry_person)
 			pickups[i].bounce_timer = 0
@@ -210,7 +223,6 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 			ty = nx
 			local dot_t = dx/d*tx + dy/d*ty
 			if math.abs(dot_t) > 0.2 then
-				print("glance")
 				hit = false
 				--x1 = x1 + nx*1/1920
 				--y1 = y1 + ny*1/980
@@ -224,7 +236,6 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 		end
 		return x1*1920,y1*980,friction,-nx,-ny
 	else
-		print("inside")
 		local gx,gy = sdf_get_gradient(sdf,x1,y1)
 		local n = math.sqrt(gx*gx + gy*gy)
 		if n == 0 then
@@ -431,7 +442,6 @@ function update_game(dt)
 			player.speed = player.speed*(1-friction)
 			player.accel = player.accel*(1-friction)
 			if friction > 0.2 then
-				print("HIT!")
 				player.vx = nx*100
 				player.vy = ny*100
 			end
@@ -448,17 +458,18 @@ function update_game(dt)
 				local c2 = {
 					start_x = pickup.x, end_x = pickup.x,
 					start_y = pickup.y, end_y = pickup.y,
-					vx = 0, vy = 0, r = 16
+					vx = 0, vy = 0, r = 32
 				}
 				local ret = check_circles_collision(c1,c2)
 				if ret and player.swap_cooldown < 0 then
 					local tmp = player.inventory
-					player.inventory = pickup.name
+					player.inventory = {name= pickup.name, sprite=pickup.sprite}
 					player.swap_cooldown = 0.5
 					if tmp == nil then
 						table.insert(to_delete,j)
 					else
-						pickup.name = tmp
+						pickup.name = tmp.name
+						pickup.sprite = tmp.sprite
 					end
 				end
 
@@ -480,8 +491,8 @@ function update_game(dt)
 					vx = 0, vy = 0, r = 48
 				}
 				local ret = check_circles_collision(c1,c2)
-				if ret and player.inventory == person.wants then
-					player.score = player.score + 1
+				if ret and player.inventory and player.inventory.name == person.wants then
+					table.insert(player.score,{name=player.inventory.name,sprite=player.inventory.sprite})
 					player.inventory = nil
 					num_active_food = num_active_food-1
 					table.insert(to_delete,j)
@@ -509,9 +520,8 @@ function update_game(dt)
 				player.y = player.y - 980
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
-			if player.score >= 3 then
+			if #player.score >= 3 then
 				winning_player = player
-				print("Player "..i.." wins!")
 				switch_to_state("win")
 				reset_game()
 			end
@@ -538,7 +548,7 @@ function update_game(dt)
 			if num_active_food < 3 then
 				spawn_food()
 			end
-			food_spawn_cooldown = math.random()*4+0.3
+			food_spawn_cooldown = math.random()*9+1.2
 		end
 		food_spawn_cooldown = food_spawn_cooldown - dt
         for j,person in pairs(hungry_people) do
@@ -571,7 +581,8 @@ function draw_game(dt)
 	end
 
 	for i_player,player in pairs(active_players) do
-		love.graphics.setColor(player.color)
+        local character = characters[player.character_index]
+		love.graphics.setColor(character.color)
 		local sprite_index = math.mod(-player.steering_angle*16/math.pi/2, 16)
 		sprite_index = math.floor(sprite_index+8.5)
 		while sprite_index < 0 do
@@ -582,8 +593,12 @@ function draw_game(dt)
 		end
 		love.graphics.draw(player.sprite[sprite_index+1],player.x-32,player.y-32)
 		if player.inventory then
-			love.graphics.setFont(main_font)
-			love.graphics.print(player.inventory, player.x-8, player.y-16)
+			love.graphics.setColor(1,1,1,1)
+            love.graphics.push()
+            love.graphics.translate(player.x,player.y)
+            love.graphics.scale(0.5,0.5)
+			love.graphics.draw(player.inventory.sprite, -80, -160)
+            love.graphics.pop()
 		end
 		if false then
 			local sdf_val = sdf_get_value(obstacle_sdf,player.x/1920,player.y/1080)
@@ -591,7 +606,6 @@ function draw_game(dt)
 			love.graphics.circle("fill",player.x,player.y,3)
 			love.graphics.print(sdf_val,player.x-8,player.y-16)
 			local sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x,player.y)
-			print(string.format("dx: %f, dy:%f", sdf_dx, sdf_dy))
 			love.graphics.line(player.x,player.y,player.x+sdf_dx*100000,player.y+sdf_dy*100000)
 		end
 	end
@@ -599,11 +613,16 @@ function draw_game(dt)
 
 	for _,pickup in pairs(pickups) do 
 		if pickup then
-			local r = 16
+			local r = 32
 			local bounce = math.abs(math.sin(pickup.bounce_timer*6))
-			love.graphics.setFont(main_font)
-			love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
-			love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+            if false then
+                love.graphics.setFont(main_font)
+                love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
+                love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+            else
+                love.graphics.draw(pickup.sprite,pickup.x-110,pickup.y-bounce*10-100)
+                --love.graphics.circle("fill",pickup.x, pickup.y, r)
+            end
 		end
 	end
 	for _,person in pairs(hungry_people) do 
@@ -613,10 +632,10 @@ function draw_game(dt)
             love.graphics.translate(person.x,person.y)
             love.graphics.scale(ElasticEaseOut(person.intro_anim_t))
             love.graphics.scale(math.abs(math.sin(person.anim_t*2))*0.1+0.95)
-            love.graphics.draw(speech_bubble,-170,-180)
-            love.graphics.setColor(0,0,0,1)
-            love.graphics.print(person.wants,-100,-100)
             love.graphics.setColor(1,1,1,1)
+            love.graphics.draw(speech_bubble,-170,-180)
+            --love.graphics.print(person.wants,-100,-100)
+            love.graphics.draw(person.sprite,-170,-170)
             love.graphics.pop()
         else
             love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
@@ -633,18 +652,31 @@ function draw_game(dt)
 		love.graphics.setColor(1,1,1,1)
 		love.graphics.push()
 		love.graphics.translate((i_player-1)*200,0)
-		if character and character.sprite then
-			love.graphics.push()
-			love.graphics.scale(100/512)
-			love.graphics.draw(character.sprite)
-			love.graphics.pop()
+		if character then
+            if character.sprite then
+                love.graphics.push()
+                love.graphics.scale(100/512)
+                love.graphics.draw(character.sprite)
+                love.graphics.pop()
+            else
+                love.graphics.setColor(character.color)
+                love.graphics.rectangle("fill",0,0,100,100)
+                love.graphics.setColor(1,1,1,1)
+                love.graphics.setFont(main_font)
+                love.graphics.print(character.name,0,0)
+            end
 		else
-			love.graphics.rectangle("line",0,0,512*0.2,512*0.2)
+			love.graphics.rectangle("line",0,0,100,100)
 		end
-		love.graphics.translate(512*0.2,0)
-		for i = 1,player.score do 
+		love.graphics.translate(100,0)
+		for i,score in pairs(player.score) do 
 			r = 10
-			love.graphics.circle("fill",2*r,r+(i-1)*(3*r),r)
+			--love.graphics.circle("fill",2*r,r+(i-1)*(3*r),r)
+            love.graphics.push()
+            love.graphics.scale(0.3,0.3)
+            love.graphics.translate(2*r,r+(i-1)*(10*r))
+            love.graphics.draw(score.sprite,0,-10)
+            love.graphics.pop()
 		end
 		love.graphics.pop()
 	end

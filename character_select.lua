@@ -70,12 +70,12 @@ function keypressed_character_select(key)
 					if player.active then 
 						if not player.done then 
 							if action == "left" then 
-								player.character_index = player.character_index - 1
-								card_flip_anim[player.index] = 1.0
+								--player.character_index = player.character_index - 1
+								--card_flip_anim[player.index] = 1.0
 							end
 							if action == "right" then 
-								player.character_index = player.character_index + 1
-								card_flip_anim[player.index] = 1.0
+								--player.character_index = player.character_index + 1
+								--card_flip_anim[player.index] = 1.0
 							end
 							if action == "accept" then 
 								player.done = true
@@ -102,12 +102,12 @@ function gamepadpressed_character_select(gamepad, button)
 			if not player.done then 
 				if player.active then 
 					if button == "dpleft" then 
-						player.character_index = player.character_index - 1
-						card_flip_anim[player.index] = 1.0
+						--player.character_index = player.character_index - 1
+						--card_flip_anim[player.index] = 1.0
 					end
 					if button == "dpright" then 
-						player.character_index = player.character_index + 1
-						card_flip_anim[player.index] = 1.0
+						--player.character_index = player.character_index + 1
+						--card_flip_anim[player.index] = 1.0
 					end
 					if button == "a" then 
 						player.done = true
@@ -147,7 +147,6 @@ function draw_character_select()
 			local col = {0.2,0.2,0.2,1}
 			local character = nil
 			if player and player.active then
-				col = player.color
 				character = characters[player.character_index]
 			end
 			local x = (c-1)*(rect_w+rect_spacing_x)
@@ -174,18 +173,35 @@ function draw_character_select()
 			love.graphics.translate(-rect_w/2,0)
 
 			love.graphics.setColor(1,1,1,1)
-			if character and character.sprite then
-				card_shader:send("line_t",line_t*10)
-				love.graphics.draw(character.sprite)
-			else
-				love.graphics.setColor(col)
-				love.graphics.rectangle("fill",0, 0, rect_w, rect_h)
-			end
+			if character then
+                if character.sprite then
+                    card_shader:send("line_t",line_t*10)
+                    love.graphics.draw(character.sprite)
+                else
+                    col = character.color
+                    love.graphics.setColor(col)
+                    love.graphics.rectangle("fill",0, 0, rect_w, rect_h)
+                end
+            else
+                love.graphics.setColor(col)
+                love.graphics.rectangle("fill",0, 0, rect_w, rect_h)
+            end
 
 			love.graphics.setFont(main_font)
-			local text_col = {col[1]+0.4, col[2]+0.4, col[3]+0.4, 1}
+			local text_col = {col[1]+0.6, col[2]+0.6, col[3]+0.6, 1}
 			love.graphics.setColor(text_col)
 			love.graphics.print("P"..i,0,0)
+
+            if player then
+                if player.done then
+                    love.graphics.setFont(large_font)
+                    love.graphics.print("Ready!",150,100)
+                end
+            else
+                love.graphics.setFont(main_font)
+                love.graphics.print("Press button",150,100)
+                love.graphics.print("to join",200,130)
+            end
 
 			love.graphics.pop()
 			love.graphics.setShader()

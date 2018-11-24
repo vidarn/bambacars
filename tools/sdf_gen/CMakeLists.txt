@@ -10,7 +10,6 @@ set(SDF_GEN_SRC
 include_directories(${SDF_GEN_SRC_DIR})
 
 add_executable(sdf_gen ${SDF_GEN_SRC})
-target_compile_options(sdf_gen PRIVATE /arch:AVX2)
 
 install(TARGETS sdf_gen DESTINATION tools)
 

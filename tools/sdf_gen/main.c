@@ -24,8 +24,8 @@ int main(int argc, char **argv)
         stbi_image_free(pixels);
 
         struct SDF sdf;
-        sdf.w = 192;
-        sdf.h = 108;
+        sdf.w = 192/2;
+        sdf.h = 108/2;
         sdf.data = calloc(sdf.w*sdf.h,sizeof(float));
         create_sdf(w,h,data,sdf);
 
