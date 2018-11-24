@@ -91,7 +91,7 @@ function load_game()
 	obstacle_sdf.w = w
 	obstacle_sdf.h = h
 	splash_numbers = {
-		love.graphics.newImage("Assets/Splash_Screen/GO_v01.png"),
+		love.graphics.newImage("Assets/Splash_Screen/Go_v01.png"),
 		love.graphics.newImage("Assets/Splash_Screen/One_v01.png"),
 		love.graphics.newImage("Assets/Splash_Screen/Two_v01.png"),
 		love.graphics.newImage("Assets/Splash_Screen/Three_v01.png"),
