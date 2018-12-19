@@ -14,6 +14,19 @@ local splash_numbers = {
 
 local tank_controls = true
 
+local car_names = {
+	"Pickup",
+	"Skyline"
+}
+
+function load_car_sprite(name)
+	sprites = {}
+	for i=0,15 do
+		sprites[i+1] = love.graphics.newImage(string.format("Assets/Cars/%s/%s_%04d.png",name,name,i))
+	end
+	return sprites
+end
+
 function reset_game()
 	game_countdown = game_countdown_start
 	food_spawn_cooldown = 0
@@ -61,25 +74,13 @@ function reset_game()
 		player.swap_cooldown = 0
 		player.boost_cooldown = 0
 		player.score = {}
-        player.inventory = nil
-		player.sprite = {
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0000.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0001.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0002.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0003.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0004.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0005.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0006.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0007.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0008.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0009.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0010.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0011.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0012.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0013.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0014.png"),
-			love.graphics.newImage("Assets/Cars/Skyline/Skyline_0015.png"),
-		}
+		player.inventory = nil
+		local_car_name = car_names[1]
+		if i <= #car_names then
+			car_name =car_names[i]
+		end
+		player.sprite = load_car_sprite(car_name)
+
 	end
 end
 
@@ -186,12 +187,12 @@ function sdf_get_gradient(sdf,x,y)
 	return dx,dy
 end
 
-function sdf_trace(x,y,dx,dy,max_d,sdf,sign)
+function sdf_trace(x,y,dx,dy,r,max_d,sdf,sign)
 	local num_steps = 100
 	local dd = max_d/num_steps
 	local d = dd
 	for i=1,num_steps do
-		local sdf_dist = sdf_get_value(sdf,x+dx*d,y+dy*d)
+		local sdf_dist = sdf_get_value(sdf,x+dx*d,y+dy*d) -r
 		if sdf_dist*sign < 0 then
 			--TODO(Vidar):We can be more precise...
 			return d - dd/2,true
@@ -201,7 +202,8 @@ function sdf_trace(x,y,dx,dy,max_d,sdf,sign)
 	return d,false
 end
 
-function collide_sdf(x1, x2, y1, y2,sdf)
+function collide_sdf(x1, x2, y1, y2, r,sdf)
+	r = r/1920
 	x1 = x1/1920
 	x2 = x2/1920
 	y1 = y1/980
@@ -209,12 +211,12 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 	local dx = x2 - x1
 	local dy = y2 - y1
 	local d = math.sqrt(dx*dx + dy*dy)
-	local sdf_dist = sdf_get_value(sdf,x1,y1)
+	local sdf_dist = sdf_get_value(sdf,x1,y1) - r
 
 	if sdf_dist >= 0 then
 		local nx = 0
 		local ny = 0
-		t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
+		t,hit = sdf_trace(x1,y1,dx,dy,r,1,sdf,1)
 		x1 = x1+dx*t
 		y1 = y1+dy*t
 		nx,ny = sdf_get_gradient(sdf,x1,y1)
@@ -239,7 +241,7 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 			friction = 1 - math.abs(dot_t)
 			dx = tx*(d*(1-t))*dot_t 
 			dy = ty*(d*(1-t))*dot_t
-            t,hit = sdf_trace(x1,y1,dx,dy,1,sdf,1)
+            t,hit = sdf_trace(x1,y1,dx,dy,r,1,sdf,1)
             x1 = x1+dx*t
             y1 = y1+dy*t
 		end
@@ -254,7 +256,7 @@ function collide_sdf(x1, x2, y1, y2,sdf)
 		end
 		gx = gx/n
 		gy = gy/n
-		d, hit = sdf_trace(x1,y1,gx,gy,30/1920,sdf,-1)
+		d, hit = sdf_trace(x1,y1,gx,gy,r,30/1920,sdf,-1)
 		local friction = 0
 		if hit then friction = 1 end
 		return (x1 + gx*d)*1920, (y1 + gy*d)*980,friction,gx,gy
@@ -339,9 +341,8 @@ function player_steer(player, target_angle, target_speed_fraction, drift, boost,
 			player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
 		end
 	end
-	if boost and player.boost_cooldown < 0 then
+	if boost then
 		player.speed = boost_speed
-		player.boost_cooldown = 2
 	end
 	return player
 end
@@ -418,8 +419,18 @@ function update_game(dt)
 			else
 				target_angle = player.movement_angle
 			end
+			if boost and player.boost_cooldown > 0 then
+				boost =false
+			end
+			if boost then
+				player.boost_cooldown = 2
+				player.input_joystick:setVibration(1.0,0.2,0.2)
+			end
 
 			player = player_steer(player,target_angle, target_speed, drift, boost, dt)
+			if drift and player.input_joystick then
+				player.input_joystick:setVibration(0.0,0.8,2*dt)
+			end
 
 			local movement_angle = player.movement_angle
 			local sprite_index = math.mod(-movement_angle*16/math.pi/2, 16)
@@ -489,17 +500,23 @@ function update_game(dt)
 						player.vy = ret.vy
 						player.speed = 0
 						player.accel = 0
+						if player.input_joystick then
+							player.input_joystick:setVibration(1.,1.,0.1)
+						end
 					end
 				end
 			end
 			post_collision_players_pos[i].x, post_collision_players_pos[i].y,
 				friction, nx, ny = 
-				collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y,obstacle_sdf)
+			collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y, player_radius,obstacle_sdf)
 			player.speed = player.speed*(1-friction)
 			player.accel = player.accel*(1-friction)
 			if friction > 0.2 then
 				player.vx = nx*100
 				player.vy = ny*100
+				if player.input_joystick then
+					player.input_joystick:setVibration(0.7,0.7,0.1)
+				end
 			end
 		end
 		for i,player in pairs(active_players) do
@@ -548,12 +565,14 @@ function update_game(dt)
 					vx = 0, vy = 0, r = 48
 				}
 				local ret = check_circles_collision(c1,c2)
-				if ret and player.inventory and player.inventory.name == person.wants then
-					eat_sound:play()
-					table.insert(player.score,{name=player.inventory.name,sprite=player.inventory.sprite})
-					player.inventory = nil
-					num_active_food = num_active_food-1
-					table.insert(to_delete,j)
+				if ret then
+					if player.inventory and player.inventory.name == person.wants then
+						eat_sound:play()
+						table.insert(player.score,{name=player.inventory.name,sprite=player.inventory.sprite})
+						player.inventory = nil
+						num_active_food = num_active_food-1
+						table.insert(to_delete,j)
+					end
 				end
 
 			end
@@ -643,8 +662,9 @@ function draw_game(dt)
 
 	for i_player,player in pairs(active_players) do
         local character = characters[player.character_index]
-		love.graphics.setColor(character.color)
-		local sprite_index = math.mod(-player.steering_angle*16/math.pi/2, 16)
+		love.graphics.setColor(1,1,1,1)
+		--love.graphics.setColor(character.color)
+		local sprite_index = math.mod(player.steering_angle*16/math.pi/2, 16)
 		sprite_index = math.floor(sprite_index+8.5)
 		while sprite_index < 0 do
 			sprite_index = sprite_index + 16
@@ -720,8 +740,9 @@ function draw_game(dt)
                 love.graphics.draw(character.sprite)
                 love.graphics.pop()
             else
-                love.graphics.setColor(character.color)
-                love.graphics.rectangle("fill",0,0,100,100)
+                --love.graphics.setColor(character.color)
+                --love.graphics.rectangle("fill",0,0,100,100)
+                love.graphics.draw(player.sprite[1],32,32)
                 love.graphics.setColor(1,1,1,1)
                 love.graphics.setFont(main_font)
                 love.graphics.print(character.name,0,0)
