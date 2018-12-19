@@ -16,12 +16,12 @@ local tank_controls = true
 
 local car_names = {
 	"Pickup",
-	"Skyline"
+	--"Skyline"
 }
 
 function load_car_sprite(name)
 	sprites = {}
-	for i=0,15 do
+	for i=0,31 do
 		sprites[i+1] = love.graphics.newImage(string.format("Assets/Cars/%s/%s_%04d.png",name,name,i))
 	end
 	return sprites
@@ -433,15 +433,15 @@ function update_game(dt)
 			end
 
 			local movement_angle = player.movement_angle
-			local sprite_index = math.mod(-movement_angle*16/math.pi/2, 16)
-			sprite_index = math.floor(sprite_index+8.5)
+			local sprite_index = math.mod(-movement_angle*32/math.pi/2, 32)
+			sprite_index = math.floor(sprite_index+16)
 			while sprite_index < 0 do
-				sprite_index = sprite_index + 16
+				sprite_index = sprite_index + 32
 			end
-			while sprite_index > 15 do
-				sprite_index = sprite_index - 16
+			while sprite_index > 31 do
+				sprite_index = sprite_index - 32
 			end
-			movement_angle = -(sprite_index-8)/16*math.pi*2
+			movement_angle = -(sprite_index-15)/32*math.pi*2
 
 			local cos_angle = math.cos(movement_angle)
 			local sin_angle = math.sin(movement_angle)
@@ -664,15 +664,16 @@ function draw_game(dt)
         local character = characters[player.character_index]
 		love.graphics.setColor(1,1,1,1)
 		--love.graphics.setColor(character.color)
-		local sprite_index = math.mod(player.steering_angle*16/math.pi/2, 16)
-		sprite_index = math.floor(sprite_index+8.5)
+		local sprite_index = math.mod(player.steering_angle*32/math.pi/2, 32)
+		sprite_index = math.floor(sprite_index+16)
 		while sprite_index < 0 do
-			sprite_index = sprite_index + 16
+			sprite_index = sprite_index + 32
 		end
-		while sprite_index > 15 do
-			sprite_index = sprite_index - 16
+		while sprite_index > 31 do
+			sprite_index = sprite_index - 32
 		end
-		love.graphics.draw(player.sprite[sprite_index+1],player.x-32,player.y-32)
+		sprite_w, sprite_h = player.sprite[sprite_index+1]:getDimensions()
+		love.graphics.draw(player.sprite[sprite_index+1],player.x-sprite_w/2,player.y-sprite_h/2)
 		if player.inventory then
 			love.graphics.setColor(1,1,1,1)
             love.graphics.push()
