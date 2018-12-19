@@ -54,11 +54,12 @@ function reset_game()
 		player.y = start_positions[i].y
 		player.vx = 0
 		player.vy = 0
-		player.steering_angle = math.pi
-		player.movement_angle = math.pi
+		player.steering_angle = 3*math.pi/2
+		player.movement_angle = 3*math.pi/2
 		player.speed = 0
 		player.accel = 0
 		player.swap_cooldown = 0
+		player.boost_cooldown = 0
 		player.score = {}
         player.inventory = nil
 		player.sprite = {
@@ -303,7 +304,8 @@ function check_circles_collision(c1, c2)
 	end
 end
 
-function player_steer(player, target_angle, target_speed_fraction, drift, dt)
+function player_steer(player, target_angle, target_speed_fraction, drift, boost, dt)
+	local boost_speed = 700
 	local max_speed = 350
 	local max_delta_angle = 0.15
 	if drift then
@@ -320,7 +322,7 @@ function player_steer(player, target_angle, target_speed_fraction, drift, dt)
 	delta_angle = math.max(math.min(delta_angle,max_delta_angle),-max_delta_angle)
 	if drift then
 		player.steering_angle = player.steering_angle + delta_angle * 50* dt
-		player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
+		--player.speed, player.accel =spring(player.speed, 0, player.accel, 30.0, 0.0, dt)
 		-- TODO(Vidar):These are frame rate dependent...
 		local t = 0.95
 		player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
@@ -329,13 +331,17 @@ function player_steer(player, target_angle, target_speed_fraction, drift, dt)
 		if target_speed > player.speed then
 			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
 		else
-			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 100.0, 0.75, dt)
+			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 10.0, 0.75, dt)
 		end
 		if target_speed > 0 then
 			player.steering_angle = player.steering_angle + delta_angle * 40* dt
 			local t = 0.8
 			player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
 		end
+	end
+	if boost and player.boost_cooldown < 0 then
+		player.speed = boost_speed
+		player.boost_cooldown = 2
 	end
 	return player
 end
@@ -349,6 +355,7 @@ function update_game(dt)
 			local dx = 0
 			local dy = 0
 			local drift = false
+			local boost = false
 			if player.input_keys then
 				if tank_controls then
 					local angle = player.steering_angle
@@ -385,16 +392,25 @@ function update_game(dt)
 					drift = true
 				end
 			elseif player.input_joystick then
+				local gpx = player.input_joystick:getGamepadAxis("leftx")
+				if math.abs(gpx) < 0.2 then
+					gpx = 0
+				end
+				local gpy = player.input_joystick:getGamepadAxis("lefty")
+				if math.abs(gpy) < 0.2 then
+					gpy = 0
+				end
 				if tank_controls then
-				local angle = player.steering_angle
-					angle = angle + 5*dt*player.input_joystick:getGamepadAxis("leftx")
+					local angle = player.steering_angle
+					angle = angle + 6*dt*gpx
 					dx = math.cos(angle)
 					dy = math.sin(angle)
 				else
-					dx = player.input_joystick:getGamepadAxis("leftx")
-					dy = player.input_joystick:getGamepadAxis("lefty")
+					dx = gpx
+					dy = gpy
 				end
 				drift = player.input_joystick:isGamepadDown("a")
+				boost = player.input_joystick:isGamepadDown("b")
 				target_speed = player.input_joystick:getGamepadAxis("triggerright")
 			end
 			if math.abs(dx) > 0.1 or math.abs(dy) > 0.1 then
@@ -403,10 +419,21 @@ function update_game(dt)
 				target_angle = player.movement_angle
 			end
 
-			player = player_steer(player,target_angle, target_speed, drift, dt)
+			player = player_steer(player,target_angle, target_speed, drift, boost, dt)
 
-			local cos_angle = math.cos(player.movement_angle)
-			local sin_angle = math.sin(player.movement_angle)
+			local movement_angle = player.movement_angle
+			local sprite_index = math.mod(-movement_angle*16/math.pi/2, 16)
+			sprite_index = math.floor(sprite_index+8.5)
+			while sprite_index < 0 do
+				sprite_index = sprite_index + 16
+			end
+			while sprite_index > 15 do
+				sprite_index = sprite_index - 16
+			end
+			movement_angle = -(sprite_index-8)/16*math.pi*2
+
+			local cos_angle = math.cos(movement_angle)
+			local sin_angle = math.sin(movement_angle)
 
 			player.vx = player.vx * math.pow(0.001,dt)
 			player.vy = player.vy * math.pow(0.001,dt)
@@ -551,6 +578,7 @@ function update_game(dt)
 				player.y = player.y - 980
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
+			player.boost_cooldown = player.boost_cooldown - dt
 			if #player.score >= 3 then
 				winning_player = player
 				switch_to_state("win")
