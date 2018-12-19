@@ -12,6 +12,8 @@ local num_active_food = 0
 local splash_numbers = {
 }
 
+local tank_controls = true
+
 function reset_game()
 	game_countdown = game_countdown_start
 	food_spawn_cooldown = 0
@@ -44,6 +46,8 @@ function reset_game()
     for i,fsp in pairs(food_spawn_points) do 
         local sprite_file = "Assets/Food/"..fsp.name..".png"
         fsp.sprite = love.graphics.newImage(sprite_file)
+        local sound_file = "Assets/Sound/"..fsp.name..".wav"
+        fsp.sound = love.audio.newSource(sound_file,"static")
     end
 	for i,player in pairs(active_players) do
 		player.x = start_positions[i].x
@@ -80,9 +84,12 @@ end
 
 function load_game()
 	reset_game()
-	bkg_image = love.graphics.newImage("Assets/City/townmap_04.jpg")
+	pickup_sound =love.audio.newSource("Assets/Sound/pickup.wav", "static")
+	eat_sound =love.audio.newSource("Assets/Sound/bite.wav", "static")
+	phone_sound =love.audio.newSource("Assets/Sound/phone.wav", "static")
+	bkg_image = love.graphics.newImage("Assets/City/townmap_05.png")
     speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
-	local obst_data = love.filesystem.read("string", "Assets/City/townmap_04_sdf.sdf")
+	local obst_data = love.filesystem.read("string", "Assets/City/townmap_05_sdf.sdf")
 	local w, h, pos = love.data.unpack("=ii",obst_data)
 	obstacle_sdf = {}
 	for i=1,w*h do 
@@ -129,7 +136,8 @@ function spawn_food()
 			local hungry_people_location = hungry_people_locations[r2]
 			table.remove(hungry_people_locations,r2)
 			local hungry_person = {x=hungry_people_location.x, y=hungry_people_location.y, wants = food_name, sprite = pickups[i].sprite}
-			hungry_person.spawn_cooldown = 0.7
+			pickups[i].sound:play()
+			hungry_person.spawn_cooldown = 1.7
 			table.insert(hungry_people_spawn_queue, hungry_person)
 			pickups[i].bounce_timer = 0
 			num_active_food = num_active_food+1
@@ -342,29 +350,50 @@ function update_game(dt)
 			local dy = 0
 			local drift = false
 			if player.input_keys then
-				local target_angles = {}
-				if love.keyboard.isDown(player.input_keys.up) then
-					dy = -1
-					target_speed = 1
-				end
-				if love.keyboard.isDown(player.input_keys.down) then
-					dy = 1
-					target_speed = 1
-				end
-				if love.keyboard.isDown(player.input_keys.left) then
-					dx = -1
-					target_speed = 1
-				end
-				if love.keyboard.isDown(player.input_keys.right) then
-					dx = 1
-					target_speed = 1
+				if tank_controls then
+					local angle = player.steering_angle
+					if love.keyboard.isDown(player.input_keys.up) then
+						target_speed = 1
+					end
+					if love.keyboard.isDown(player.input_keys.left) then
+						angle = angle - 5*dt
+					end
+					if love.keyboard.isDown(player.input_keys.right) then
+						angle = angle + 5*dt
+					end
+					dx = math.cos(angle)
+					dy = math.sin(angle)
+				else
+					if love.keyboard.isDown(player.input_keys.up) then
+						dy = -1
+						target_speed = 1
+					end
+					if love.keyboard.isDown(player.input_keys.down) then
+						dy = 1
+						target_speed = 1
+					end
+					if love.keyboard.isDown(player.input_keys.left) then
+						dx = -1
+						target_speed = 1
+					end
+					if love.keyboard.isDown(player.input_keys.right) then
+						dx = 1
+						target_speed = 1
+					end
 				end
 				if love.keyboard.isDown(player.input_keys.drift) then
 					drift = true
 				end
 			elseif player.input_joystick then
-				dx = player.input_joystick:getGamepadAxis("leftx")
-				dy = player.input_joystick:getGamepadAxis("lefty")
+				if tank_controls then
+				local angle = player.steering_angle
+					angle = angle + 5*dt*player.input_joystick:getGamepadAxis("leftx")
+					dx = math.cos(angle)
+					dy = math.sin(angle)
+				else
+					dx = player.input_joystick:getGamepadAxis("leftx")
+					dy = player.input_joystick:getGamepadAxis("lefty")
+				end
 				drift = player.input_joystick:isGamepadDown("a")
 				target_speed = player.input_joystick:getGamepadAxis("triggerright")
 			end
@@ -465,6 +494,7 @@ function update_game(dt)
 					local tmp = player.inventory
 					player.inventory = {name= pickup.name, sprite=pickup.sprite}
 					player.swap_cooldown = 0.5
+					pickup_sound:play()
 					if tmp == nil then
 						table.insert(to_delete,j)
 					else
@@ -492,6 +522,7 @@ function update_game(dt)
 				}
 				local ret = check_circles_collision(c1,c2)
 				if ret and player.inventory and player.inventory.name == person.wants then
+					eat_sound:play()
 					table.insert(player.score,{name=player.inventory.name,sprite=player.inventory.sprite})
 					player.inventory = nil
 					num_active_food = num_active_food-1
@@ -533,6 +564,7 @@ function update_game(dt)
 			local person = hungry_people_spawn_queue[i]
 			person.spawn_cooldown = person.spawn_cooldown - dt
 			if person.spawn_cooldown < 0 then
+				phone_sound:play()
 				for j=1,999 do
 					if hungry_people[j] == nil then
 						hungry_people[j] = person
@@ -545,7 +577,7 @@ function update_game(dt)
 			end
 		end
 		if food_spawn_cooldown < 0 then
-			if num_active_food < 3 then
+			if num_active_food < 1 then
 				spawn_food()
 			end
 			food_spawn_cooldown = math.random()*9+1.2
@@ -556,6 +588,7 @@ function update_game(dt)
         end
 	end
 	game_countdown = game_countdown - dt
+
 end
 
 function draw_game(dt)
@@ -707,4 +740,15 @@ function draw_game(dt)
 		end
 	end
 
+end
+
+function keypressed_game(key)
+	--Debug keys
+	if key == "t" then
+		if tank_controls == true then
+			tank_controls =false
+		else 
+			tank_controls = true
+		end
+	end
 end

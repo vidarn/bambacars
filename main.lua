@@ -91,6 +91,9 @@ end
 
 
 function love.load(arg)
+	main_music = love.audio.newSource("Assets/Music/Verte.mp3","stream")
+	main_music:setLooping(true)
+	main_music:play()
 	prev_state_canvas = love.graphics.newCanvas()
 	transition_shader = love.graphics.newShader(transition_pixelcode,transition_vertexcode)
 	num_keyboard_players = num_players
@@ -185,6 +188,9 @@ function love.keypressed(key)
 	end
 	if game_state == "title" then
 		keypressed_title(key)
+	end
+	if game_state == "game" then
+		keypressed_game(key)
 	end
 	if game_state == "win" then
 		keypressed_win(key)

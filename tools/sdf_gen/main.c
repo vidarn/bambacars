@@ -18,7 +18,7 @@ int main(int argc, char **argv)
 
 		unsigned char *data = calloc(w*h, 1);
 		for (int i = 0; i < w*h; i++) {
-			data[i] = pixels[i * 3] < 128;
+			data[i] = pixels[i * 3] > 128;
 		}
 
         stbi_image_free(pixels);

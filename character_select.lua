@@ -23,6 +23,8 @@ vec4 position( mat4 transform_projection, vec4 vertex_position )
 ]] 
 
 function load_character_select()
+	done_sound = love.audio.newSource("Assets/Sound/car_start.wav", "static");
+	menu_sound = love.audio.newSource("Assets/Sound/menu.wav", "static");
 	card_shader = love.graphics.newShader(card_pixelcode,card_vertexcode)
 	for i,player in pairs(players) do
 		player.done = false
@@ -80,6 +82,7 @@ function keypressed_character_select(key)
 							if action == "accept" then 
 								player.done = true
 								card_done_anim[player.index] = 1.0
+								love.audio.play(done_sound)
 							end
 							if player.character_index < 1 then player.character_index = num_characters end
 							if player.character_index > num_characters then player.character_index = 1 end
@@ -89,6 +92,7 @@ function keypressed_character_select(key)
 						table.insert(active_players,player)
 						player.index = #active_players
 						card_flip_anim[player.index] = 1.0
+						love.audio.play(menu_sound)
 					end
 				end
 			end
@@ -112,6 +116,7 @@ function gamepadpressed_character_select(gamepad, button)
 					if button == "a" then 
 						player.done = true
 						card_done_anim[player.index] = 1.0
+						love.audio.play(done_sound)
 					end
 					if player.character_index < 1 then player.character_index = num_characters end
 					if player.character_index > num_characters then player.character_index = 1 end
@@ -120,6 +125,7 @@ function gamepadpressed_character_select(gamepad, button)
 					table.insert(active_players,player)
 					player.index = #active_players
 					card_flip_anim[player.index] = 1.0
+					love.audio.play(menu_sound)
 				end
 			end
 		end
