@@ -15,8 +15,9 @@ local splash_numbers = {
 local tank_controls = true
 
 local car_names = {
+	"Bus",
+	"Bigfoot",
 	"Pickup",
-	--"Skyline"
 }
 
 function load_car_sprite(name)
@@ -47,21 +48,21 @@ function reset_game()
 		{name="IceCream",x=982,y=900},
 		{name="Shrimp",x=1644,y=264},
 	}
-    local start_positions = {
-        {x=344,y=484},
-        {x=1100,y=222},
-        {x=1674,y=122},
-        {x=344,y=752},
-        {x=1100,y=626},
-        {x=1706,y=708},
-    }
-    num_active_food =0
-    for i,fsp in pairs(food_spawn_points) do 
-        local sprite_file = "Assets/Food/"..fsp.name..".png"
-        fsp.sprite = love.graphics.newImage(sprite_file)
-        local sound_file = "Assets/Sound/"..fsp.name..".wav"
-        fsp.sound = love.audio.newSource(sound_file,"static")
-    end
+	local start_positions = {
+		{x=344,y=484},
+		{x=1100,y=222},
+		{x=1674,y=122},
+		{x=344,y=752},
+		{x=1100,y=626},
+		{x=1706,y=708},
+	}
+	num_active_food =0
+	for i,fsp in pairs(food_spawn_points) do 
+		local sprite_file = "Assets/Food/"..fsp.name..".png"
+		fsp.sprite = love.graphics.newImage(sprite_file)
+		local sound_file = "Assets/Sound/"..fsp.name..".wav"
+		fsp.sound = love.audio.newSource(sound_file,"static")
+	end
 	for i,player in pairs(active_players) do
 		player.x = start_positions[i].x
 		player.y = start_positions[i].y
@@ -80,8 +81,11 @@ function reset_game()
 			car_name =car_names[i]
 		end
 		player.sprite = load_car_sprite(car_name)
+		player.skidmarks_verts = {{}, {}, {}, {}}
+		player.skidmarks_mesh_id = nil
 
 	end
+	skidmarks_meshes = {}
 end
 
 function load_game()
@@ -90,7 +94,7 @@ function load_game()
 	eat_sound =love.audio.newSource("Assets/Sound/bite.wav", "static")
 	phone_sound =love.audio.newSource("Assets/Sound/phone.wav", "static")
 	bkg_image = love.graphics.newImage("Assets/City/townmap_05.png")
-    speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
+	speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
 	local obst_data = love.filesystem.read("string", "Assets/City/townmap_05_sdf.sdf")
 	local w, h, pos = love.data.unpack("=ii",obst_data)
 	obstacle_sdf = {}
@@ -241,9 +245,9 @@ function collide_sdf(x1, x2, y1, y2, r,sdf)
 			friction = 1 - math.abs(dot_t)
 			dx = tx*(d*(1-t))*dot_t 
 			dy = ty*(d*(1-t))*dot_t
-            t,hit = sdf_trace(x1,y1,dx,dy,r,1,sdf,1)
-            x1 = x1+dx*t
-            y1 = y1+dy*t
+			t,hit = sdf_trace(x1,y1,dx,dy,r,1,sdf,1)
+			x1 = x1+dx*t
+			y1 = y1+dy*t
 		end
 		return x1*1920,y1*980,friction,-nx,-ny
 	else
@@ -331,11 +335,11 @@ function player_steer(player, target_angle, target_speed_fraction, drift, boost,
 	else
 		target_speed = max_speed*target_speed_fraction
 		if target_speed > player.speed then
-			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
+			player.speed, player.accel = spring(player.speed, target_speed, player.accel, 60.0, 0.0, dt)
 		else
-			player.speed, player.accel =spring(player.speed, target_speed, player.accel, 10.0, 0.75, dt)
+			player.speed, player.accel = spring(player.speed, target_speed, player.accel, 40.0, 0.75, dt)
 		end
-		if target_speed > 0 then
+		if math.abs(target_speed) > 0 then
 			player.steering_angle = player.steering_angle + delta_angle * 40* dt
 			local t = 0.8
 			player.movement_angle = t*player.movement_angle + (1-t)*player.steering_angle
@@ -413,6 +417,10 @@ function update_game(dt)
 				drift = player.input_joystick:isGamepadDown("a")
 				boost = player.input_joystick:isGamepadDown("b")
 				target_speed = player.input_joystick:getGamepadAxis("triggerright")
+				reverse_speed = player.input_joystick:getGamepadAxis("triggerleft")
+				if reverse_speed > 0.3 then
+					target_speed = -reverse_speed*0.3
+				end
 			end
 			if math.abs(dx) > 0.1 or math.abs(dy) > 0.1 then
 				target_angle = math.atan2(dy,dx)
@@ -426,6 +434,8 @@ function update_game(dt)
 				player.boost_cooldown = 2
 				player.input_joystick:setVibration(1.0,0.2,0.2)
 			end
+
+			local do_skidmarks = drift
 
 			player = player_steer(player,target_angle, target_speed, drift, boost, dt)
 			if drift and player.input_joystick then
@@ -459,6 +469,33 @@ function update_game(dt)
 				x = player.x + dx,
 				y = player.y + dy
 			}
+			if do_skidmarks then 
+				local wheel_positions = {{10,10},{-10,10},{10,-10},{-10,-10}}
+				for i,wheel_pos in pairs(wheel_positions) do
+					local w = 8
+					local x = player.x - math.sin(player.steering_angle)*wheel_pos[1] + math.cos(player.steering_angle)*wheel_pos[2]
+					local y = player.y + math.cos(player.steering_angle)*wheel_pos[1] + math.sin(player.steering_angle)*wheel_pos[2]
+					local dx = -math.sin(movement_angle)
+					local dy = math.cos(movement_angle)
+					local a = math.random()*0.5 + 0.5
+					if #player.skidmarks_verts[i] < 32  then
+						a = a*#player.skidmarks_verts[i]/32
+					end
+					local vert1 = {x + dx*w*0.5, y + dy*w*0.5, 0, 0.5, a, a, a, a}
+					table.insert(player.skidmarks_verts[i],vert1)
+					local vert2 = {x - dx*w*0.5, y - dy*w*0.5, 1, 0.5, a, a, a, a}
+					table.insert(player.skidmarks_verts[i],vert2)
+					if #player.skidmarks_verts[i] > 2 then 
+						if player.skidmarks_mesh_id == nil then
+							player.skidmarks_mesh_id = #skidmarks_meshes
+						end
+						skidmarks_meshes[player.skidmarks_mesh_id + i] = love.graphics.newMesh(player.skidmarks_verts[i], "strip")
+					end
+				end
+			else
+				player.skidmarks_verts = {{},{},{},{}}
+				player.skidmarks_mesh_id = nil
+			end
 		end
 
 		local post_collision_players_pos = {}
@@ -507,7 +544,7 @@ function update_game(dt)
 				end
 			end
 			post_collision_players_pos[i].x, post_collision_players_pos[i].y,
-				friction, nx, ny = 
+			friction, nx, ny = 
 			collide_sdf(player.x, post_collision_players_pos[i].x, player.y, post_collision_players_pos[i].y, player_radius,obstacle_sdf)
 			player.speed = player.speed*(1-friction)
 			player.accel = player.accel*(1-friction)
@@ -553,7 +590,7 @@ function update_game(dt)
 			end
 			to_delete = {}
 			for j,person in pairs(hungry_people) do
-                person.anim_t = person.anim_t+dt*1
+				person.anim_t = person.anim_t+dt*1
 				local c1 = {
 					start_x = player.x, end_x = post_pos_player.x,
 					start_y = player.y, end_y = post_pos_player.y,
@@ -584,17 +621,26 @@ function update_game(dt)
 		for i,player in pairs(active_players) do
 			player.x = post_collision_players_pos[i].x
 			player.y = post_collision_players_pos[i].y
+			local has_warped = false
 			while player.x < 0 do
 				player.x = player.x + 1920
+				has_warped = true
 			end
 			while player.x > 1920 do
 				player.x = player.x - 1920
+				has_warped = true
 			end
 			while player.y < 0 do
 				player.y = player.y + 980
+				has_warped = true
 			end
 			while player.y > 980 do
 				player.y = player.y - 980
+				has_warped = true
+			end
+			if has_warped then 
+				player.skidmarks_verts = {{},{},{},{}}
+				player.skidmarks_mesh_id = nil
 			end
 			player.swap_cooldown = player.swap_cooldown - dt
 			player.boost_cooldown = player.boost_cooldown - dt
@@ -615,8 +661,8 @@ function update_game(dt)
 				for j=1,999 do
 					if hungry_people[j] == nil then
 						hungry_people[j] = person
-                        person.intro_anim_t = 0
-                        person.anim_t = 0
+						person.intro_anim_t = 0
+						person.anim_t = 0
 						break
 					end
 				end
@@ -630,9 +676,9 @@ function update_game(dt)
 			food_spawn_cooldown = math.random()*9+1.2
 		end
 		food_spawn_cooldown = food_spawn_cooldown - dt
-        for j,person in pairs(hungry_people) do
-            person.intro_anim_t = math.min(person.intro_anim_t+dt*1.5,1.0)
-        end
+		for j,person in pairs(hungry_people) do
+			person.intro_anim_t = math.min(person.intro_anim_t+dt*1.5,1.0)
+		end
 	end
 	game_countdown = game_countdown - dt
 
@@ -660,10 +706,14 @@ function draw_game(dt)
 		end
 	end
 
+	love.graphics.setColor(0,0,0,0.15)
+	for _,mesh in pairs(skidmarks_meshes) do
+		love.graphics.draw(mesh)
+	end
+
 	for i_player,player in pairs(active_players) do
-        local character = characters[player.character_index]
 		love.graphics.setColor(1,1,1,1)
-		--love.graphics.setColor(character.color)
+		local character = characters[player.character_index]
 		local sprite_index = math.mod(player.steering_angle*32/math.pi/2, 32)
 		sprite_index = math.floor(sprite_index+16)
 		while sprite_index < 0 do
@@ -676,11 +726,11 @@ function draw_game(dt)
 		love.graphics.draw(player.sprite[sprite_index+1],player.x-sprite_w/2,player.y-sprite_h/2)
 		if player.inventory then
 			love.graphics.setColor(1,1,1,1)
-            love.graphics.push()
-            love.graphics.translate(player.x,player.y)
-            love.graphics.scale(0.5,0.5)
+			love.graphics.push()
+			love.graphics.translate(player.x,player.y)
+			love.graphics.scale(0.5,0.5)
 			love.graphics.draw(player.inventory.sprite, -80, -160)
-            love.graphics.pop()
+			love.graphics.pop()
 		end
 		if false then
 			local sdf_val = sdf_get_value(obstacle_sdf,player.x/1920,player.y/1080)
@@ -697,32 +747,32 @@ function draw_game(dt)
 		if pickup then
 			local r = 32
 			local bounce = math.abs(math.sin(pickup.bounce_timer*6))
-            if false then
-                love.graphics.setFont(main_font)
-                love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
-                love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
-            else
-                love.graphics.draw(pickup.sprite,pickup.x-110,pickup.y-bounce*10-100)
-                --love.graphics.circle("fill",pickup.x, pickup.y, r)
-            end
+			if false then
+				love.graphics.setFont(main_font)
+				love.graphics.print(pickup.name,pickup.x-20,pickup.y-40)
+				love.graphics.circle("fill",pickup.x, pickup.y-bounce*10, r)
+			else
+				love.graphics.draw(pickup.sprite,pickup.x-110,pickup.y-bounce*10-100)
+				--love.graphics.circle("fill",pickup.x, pickup.y, r)
+			end
 		end
 	end
 	for _,person in pairs(hungry_people) do 
 		love.graphics.setFont(main_font)
-        if true then
-            love.graphics.push()
-            love.graphics.translate(person.x,person.y)
-            love.graphics.scale(ElasticEaseOut(person.intro_anim_t))
-            love.graphics.scale(math.abs(math.sin(person.anim_t*2))*0.1+0.95)
-            love.graphics.setColor(1,1,1,1)
-            love.graphics.draw(speech_bubble,-170,-180)
-            --love.graphics.print(person.wants,-100,-100)
-            love.graphics.draw(person.sprite,-170,-170)
-            love.graphics.pop()
-        else
-            love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
-            love.graphics.circle("fill",person.x,person.y,2)
-        end
+		if true then
+			love.graphics.push()
+			love.graphics.translate(person.x,person.y)
+			love.graphics.scale(ElasticEaseOut(person.intro_anim_t))
+			love.graphics.scale(math.abs(math.sin(person.anim_t*2))*0.1+0.95)
+			love.graphics.setColor(1,1,1,1)
+			love.graphics.draw(speech_bubble,-170,-180)
+			--love.graphics.print(person.wants,-100,-100)
+			love.graphics.draw(person.sprite,-170,-170)
+			love.graphics.pop()
+		else
+			love.graphics.print("I want\n"..person.wants,person.x-20,person.y-40)
+			love.graphics.circle("fill",person.x,person.y,2)
+		end
 	end
 	love.graphics.pop()
 
@@ -735,19 +785,19 @@ function draw_game(dt)
 		love.graphics.push()
 		love.graphics.translate((i_player-1)*200,0)
 		if character then
-            if character.sprite then
-                love.graphics.push()
-                love.graphics.scale(100/512)
-                love.graphics.draw(character.sprite)
-                love.graphics.pop()
-            else
-                --love.graphics.setColor(character.color)
-                --love.graphics.rectangle("fill",0,0,100,100)
-                love.graphics.draw(player.sprite[1],32,32)
-                love.graphics.setColor(1,1,1,1)
-                love.graphics.setFont(main_font)
-                love.graphics.print(character.name,0,0)
-            end
+			if character.sprite then
+				love.graphics.push()
+				love.graphics.scale(100/512)
+				love.graphics.draw(character.sprite)
+				love.graphics.pop()
+			else
+				--love.graphics.setColor(character.color)
+				--love.graphics.rectangle("fill",0,0,100,100)
+				love.graphics.draw(player.sprite[1],32,32)
+				love.graphics.setColor(1,1,1,1)
+				love.graphics.setFont(main_font)
+				love.graphics.print(character.name,0,0)
+			end
 		else
 			love.graphics.rectangle("line",0,0,100,100)
 		end
@@ -755,11 +805,11 @@ function draw_game(dt)
 		for i,score in pairs(player.score) do 
 			r = 10
 			--love.graphics.circle("fill",2*r,r+(i-1)*(3*r),r)
-            love.graphics.push()
-            love.graphics.scale(0.3,0.3)
-            love.graphics.translate(2*r,r+(i-1)*(10*r))
-            love.graphics.draw(score.sprite,0,-10)
-            love.graphics.pop()
+			love.graphics.push()
+			love.graphics.scale(0.3,0.3)
+			love.graphics.translate(2*r,r+(i-1)*(10*r))
+			love.graphics.draw(score.sprite,0,-10)
+			love.graphics.pop()
 		end
 		love.graphics.pop()
 	end
@@ -777,16 +827,16 @@ function draw_game(dt)
 	else
 		local n = math.ceil(game_countdown) + 1
 		local s = splash_numbers[n]
-        local f = game_countdown - n + 2
+		local f = game_countdown - n + 2
 		if s then
-            love.graphics.push()
-            love.graphics.translate(1920/2,1080/2)
-            local scale = ElasticEaseOut(1-f)
-            love.graphics.scale(scale,scale)
-            love.graphics.translate(-1920/2,-1080/2)
-            --print(string.format("%f %f",n,f))
+			love.graphics.push()
+			love.graphics.translate(1920/2,1080/2)
+			local scale = ElasticEaseOut(1-f)
+			love.graphics.scale(scale,scale)
+			love.graphics.translate(-1920/2,-1080/2)
+			--print(string.format("%f %f",n,f))
 			love.graphics.draw(s,0,0)
-            love.graphics.pop()
+			love.graphics.pop()
 		end
 	end
 
