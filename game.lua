@@ -30,7 +30,9 @@ function load_car_sprite(name)
 end
 
 local obstacle_types = {
-	{name="Cone", weight = 0.2}
+	{name="Cone", weight = 0.02},
+	{name="Gnome", weight = 0.7},
+	{name="Box", weight = 1.6},
 }
 local obstacles = {}
 
@@ -47,7 +49,7 @@ function load_obstacle_sprites()
 end
 
 function add_obstacle(x,y)
-	local obst_type = obstacle_types[1]
+	local obst_type = obstacle_types[math.random(#obstacle_types)]
 	local obst = {
 		x = math.random()*1920, y= math.random()*980, z = 0,
 		direction = math.random()*2*math.pi, angle = 0,
@@ -65,6 +67,40 @@ end
 
 function update_obstacles(dt, post_collision_players_pos)
 	for _,obst in pairs(obstacles) do
+		local last_x = obst.last_x
+		local last_y = obst.last_y
+		local last_z = obst.last_z
+		local last_angle = obst.last_angle
+		local last_direction = obst.last_direction
+
+		obst.last_x = obst.x
+		obst.last_y = obst.y
+		obst.last_z = obst.z
+		obst.last_angle = obst.angle
+		obst.last_direction = obst.direction
+
+		local gravity = 5
+
+		local vz = math.min((obst.z - last_z),3)
+		obst.z = obst.z + (vz - gravity*dt)
+		local friction = 0
+		if obst.z < 0 then
+			obst.z = -obst.z
+			friction = 0.1
+			obst.last_z = - obst.last_z*0.3
+		end
+		local vx = math.min((obst.x - last_x),3)
+		local vy = math.min((obst.y - last_y),3)
+		obst.x = obst.x + vx*(1-friction)
+		obst.y = obst.y + vy*(1-friction)
+		obst.angle = obst.angle + (obst.angle - last_angle)*(1-friction)
+
+		local new_x, new_y, friction, nx, ny = collide_sdf(obst.x, obst.x, obst.y, obst.y, 10, obstacle_sdf)
+		if friction > 0.7 then
+			obst.x = new_x
+			obst.y = new_y
+		end
+
 		if obst.z < 20 then
 			for i,player in pairs(active_players) do
 				local post_pos_player = post_collision_players_pos[i]
@@ -80,47 +116,17 @@ function update_obstacles(dt, post_collision_players_pos)
 				}
 				local ret = check_circles_collision(c1,c2)
 				if ret then
-					local vx = ret.vx*player.speed/300
-					local vy = ret.vy*player.speed/300
+					print("Cone hit")
+					local vx = ret.dx
+					local vy = ret.dy
 					local v = math.sqrt(vx*vx + vy*vy)
-					obst.x = obst.last_x - 6*vx*dt
-					obst.y = obst.last_y - 6*vy*dt
-					obst.z = obst.last_z + v*10*dt
-					obst.angle = obst.angle + 0.5*v*dt
+					obst.x = obst.x + ret.dx * (1-ret.t)
+					obst.y = obst.y + ret.dy * (1-ret.t)
+					obst.z = obst.z + 0.5*v*v*dt/obst.weight
+					obst.angle = obst.angle + 0.01*v*v*dt/obst.weight
 					obst.direction = math.atan2(vx,vy)
 				end
 			end
-		end
-		local last_x = obst.last_x
-		local last_y = obst.last_y
-		local last_z = obst.last_z
-		local last_angle = obst.last_angle
-		local last_direction = obst.last_direction
-
-		obst.last_x = obst.x
-		obst.last_y = obst.y
-		obst.last_z = obst.z
-		obst.last_angle = obst.angle
-		obst.last_direction = obst.direction
-
-		local gravity = 5
-
-		obst.z = obst.z + (obst.z - last_z - gravity*dt)
-		local friction = 0
-		if obst.z < 0 then
-			obst.z = -obst.z
-			friction = 0.1
-			obst.last_z = - obst.last_z*0.3
-		end
-		--TODO(Vidar): Take frame rate into account
-		obst.x = obst.x + (obst.x - last_x)*(1-friction)
-		obst.y = obst.y + (obst.y - last_y)*(1-friction)
-		obst.angle = obst.angle + (obst.angle - last_angle)*(1-friction)
-
-		local new_x, new_y, friction, nx, ny = collide_sdf(obst.x, obst.x, obst.y, obst.y, 10, obstacle_sdf)
-		if friction > 0.7 then
-			obst.x = new_x
-			obst.y = new_y
 		end
 
 		local has_warped = false
@@ -282,7 +288,7 @@ function load_game()
 	pickup_sound =love.audio.newSource("Assets/Sound/pickup.wav", "static")
 	eat_sound =love.audio.newSource("Assets/Sound/bite.wav", "static")
 	phone_sound =love.audio.newSource("Assets/Sound/phone.wav", "static")
-	bkg_image = love.graphics.newImage("Assets/City/townmap_05.png")
+	bkg_image = love.graphics.newImage("Assets/City/townmap_06.png")
 	--bkg_video = love.graphics.newVideo("Assets/VideoTest/test.ogg")
 	speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
 	local obst_data = love.filesystem.read("string", "Assets/City/townmap_05_sdf.sdf")
@@ -347,7 +353,7 @@ function player_sdf_get_value(players,x,y)
 	for _,player in pairs(players) do
 		local dx = x - player.x
 		local dy = y - player.y
-		local d = dx*dx + dy*dy
+		local d = math.sqrt(dx*dx + dy*dy)
 		if d < dist then
 			dist = d
 		end
@@ -514,6 +520,9 @@ function check_circles_collision(c1, c2)
 			ret.y = c1.start_y + t1*dy2
 			ret.vx = c1.vx + nx*17
 			ret.vy = c1.vy + ny*17
+			ret.dx = dx2
+			ret.dy = dy2
+			ret.t = t1
 			return ret
 		end
 	end
@@ -664,7 +673,7 @@ function update_game(dt)
 					target_dy = target_dy/n
 				end
 				local other_players = {}
-				for j,p in pairs(players) do 
+				for j,p in pairs(active_players) do 
 					if i ~= j and not p.inventory then
 						table.insert(other_players, p)
 					end
@@ -674,13 +683,13 @@ function update_game(dt)
 				sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x/1920,player.y/980)
 				sdf = sdf_get_value(obstacle_sdf,player.x/1920,player.y/980)
 
-				local avoidance = 2
+				local avoidance = 50
 				if player.inventory then 
 					avoidance = 100
 				end
 
-				dx = prev_dx + 0.1*random_dx + 0.05*sdf_dx/sdf + 500*target_dx + avoidance*player_sdf_dx/player_sdf
-				dy = prev_dy + 0.1*random_dy + 0.05*sdf_dy/sdf + 500*target_dy + avoidance*player_sdf_dy/player_sdf
+				dx = prev_dx + 0.1*random_dx + 0.07*sdf_dx/sdf + 500*target_dx + avoidance*player_sdf_dx/player_sdf
+				dy = prev_dy + 0.1*random_dy + 0.07*sdf_dy/sdf + 500*target_dy + avoidance*player_sdf_dy/player_sdf
 
 				local ai_state = player.ai_state
 				ai_state.drift_cooldown = ai_state.drift_cooldown - dt
@@ -711,7 +720,7 @@ function update_game(dt)
 			local do_skidmarks = drift
 
 			player = player_steer(player,target_angle, target_speed, drift, boost, dt)
-			if drift and player.input_joystick then
+			if drift and player.input_joystick and player.active then
 				player.input_joystick:setVibration(0.0,0.8,2*dt)
 			end
 
@@ -806,8 +815,10 @@ function update_game(dt)
 						end
 						post_collision_players_pos[i].x = ret.x
 						post_collision_players_pos[i].y = ret.y
-						player.vx = ret.vx
-						player.vy = ret.vy
+						if not player.inventory then
+							player.vx = ret.vx
+							player.vy = ret.vy
+						end
 						player.speed = 0
 						player.accel = 0
 						if player.input_joystick then
@@ -863,7 +874,6 @@ function update_game(dt)
 			end
 			to_delete = {}
 			for j,person in pairs(hungry_people) do
-				person.anim_t = person.anim_t+dt*1
 				local c1 = {
 					start_x = player.x, end_x = post_pos_player.x,
 					start_y = player.y, end_y = post_pos_player.y,
@@ -890,6 +900,9 @@ function update_game(dt)
 				table.insert(hungry_people_locations,hungry_people[j])
 				hungry_people[j] = nil
 			end
+		end
+		for j,person in pairs(hungry_people) do
+			person.anim_t = person.anim_t+dt*1
 		end
 		update_obstacles(dt,post_collision_players_pos)
 		for i,player in pairs(active_players) do

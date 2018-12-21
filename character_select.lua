@@ -55,7 +55,7 @@ function update_character_select(dt)
 			all_done = false
 		end
 	end
-	if all_done and num_players >1 then
+	if all_done and num_players >=1 then
 		for i,player in pairs(players) do
 			if not player.active then 
 				table.insert(active_players,player)
