@@ -56,6 +56,12 @@ function update_character_select(dt)
 		end
 	end
 	if all_done and num_players >1 then
+		for i,player in pairs(players) do
+			if not player.active then 
+				table.insert(active_players,player)
+				player.index = #active_players
+			end
+		end
 		switch_to_state("game")
 		reset_game()
         for i,player in pairs(players) do

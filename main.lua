@@ -102,20 +102,19 @@ function love.load(arg)
 	large_font = love.graphics.newFont("Assets/Fonts/Asap-SemiBold.ttf",80)
 	love.graphics.setFont(main_font)
 	joysticks = love.joystick.getJoysticks()
-	for _,joystick in pairs(joysticks) do 
-		--print(joystick:getName():sub(1,1))
-		--if joystick:getName():sub(1,1) == "X" then
-			num_players = num_players +1
-		--end
-	end
+	num_joystick_players = #joysticks
+	num_players = 6
 	for i_player =1,num_players do
 		local player = {active=false}
 		if i_player <= num_keyboard_players then
 			player.input_keys = input_keys[i_player]
-		else
+		elseif i_player <= num_joystick_players + num_keyboard_players then
 			player.input_joystick = joysticks[i_player - num_keyboard_players]
 		end
 		player.character_index = i_player
+		if player.character_index > 6 then
+			player.character_index = 6
+		end
 		players[i_player] = player
 	end
 	load_title()

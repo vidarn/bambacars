@@ -8,9 +8,8 @@ end
 
 function draw_title()
 	if false then
-		love.graphics.setColor(0,0,0,1)
-		love.graphics.rectangle('fill',0,0,1920,1080)
 		love.graphics.setColor(1,1,1,1)
+		love.graphics.draw(title_video)
 		love.graphics.translate(1920/2,1080/2-100)
 		love.graphics.setFont(title_font)
 		local w = 1024

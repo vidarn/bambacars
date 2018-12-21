@@ -18,6 +18,7 @@ local car_names = {
 	"Bus",
 	"Bigfoot",
 	"Pickup",
+	"Supra",
 }
 
 function load_car_sprite(name)
@@ -26,6 +27,178 @@ function load_car_sprite(name)
 		sprites[i+1] = love.graphics.newImage(string.format("Assets/Cars/%s/%s_%04d.png",name,name,i))
 	end
 	return sprites
+end
+
+local obstacle_types = {
+	{name="Cone", weight = 0.2}
+}
+local obstacles = {}
+
+function load_obstacle_sprites()
+	local direction_steps = 8
+	local angle_steps = 8
+	for _,ot in pairs(obstacle_types) do 
+		ot.sprites = {}
+		for i = 1,direction_steps*angle_steps do
+			ot.sprites[i] = love.graphics.newImage(string.format("Assets/Obstacles/%s/%s_%04d.png",ot.name,ot.name,i-1))
+		end
+		ot.sprite_w, ot.sprite_h = ot.sprites[1]:getDimensions()
+	end
+end
+
+function add_obstacle(x,y)
+	local obst_type = obstacle_types[1]
+	local obst = {
+		x = math.random()*1920, y= math.random()*980, z = 0,
+		direction = math.random()*2*math.pi, angle = 0,
+	}
+	for k,v in pairs(obst_type) do
+		obst[k] = v
+	end
+	obst.last_x = obst.x
+	obst.last_y = obst.y
+	obst.last_z = obst.z
+	obst.last_angle = obst.angle
+	obst.last_direction = obst.direction
+	table.insert(obstacles, obst)
+end
+
+function update_obstacles(dt, post_collision_players_pos)
+	for _,obst in pairs(obstacles) do
+		if obst.z < 20 then
+			for i,player in pairs(active_players) do
+				local post_pos_player = post_collision_players_pos[i]
+				local c1 = {
+					start_x = player.x, end_x = post_pos_player.x,
+					start_y = player.y, end_y = post_pos_player.y,
+					vx = player.vx, vy = player.vy, r = player_radius
+				}
+				local c2 = {
+					start_x = obst.x, end_x = obst.x,
+					start_y = obst.y, end_y = obst.y,
+					vx = 0, vy = 0, r = 20
+				}
+				local ret = check_circles_collision(c1,c2)
+				if ret then
+					local vx = ret.vx*player.speed/300
+					local vy = ret.vy*player.speed/300
+					local v = math.sqrt(vx*vx + vy*vy)
+					obst.x = obst.last_x - 6*vx*dt
+					obst.y = obst.last_y - 6*vy*dt
+					obst.z = obst.last_z + v*10*dt
+					obst.angle = obst.angle + 0.5*v*dt
+					obst.direction = math.atan2(vx,vy)
+				end
+			end
+		end
+		local last_x = obst.last_x
+		local last_y = obst.last_y
+		local last_z = obst.last_z
+		local last_angle = obst.last_angle
+		local last_direction = obst.last_direction
+
+		obst.last_x = obst.x
+		obst.last_y = obst.y
+		obst.last_z = obst.z
+		obst.last_angle = obst.angle
+		obst.last_direction = obst.direction
+
+		local gravity = 5
+
+		obst.z = obst.z + (obst.z - last_z - gravity*dt)
+		local friction = 0
+		if obst.z < 0 then
+			obst.z = -obst.z
+			friction = 0.1
+			obst.last_z = - obst.last_z*0.3
+		end
+		--TODO(Vidar): Take frame rate into account
+		obst.x = obst.x + (obst.x - last_x)*(1-friction)
+		obst.y = obst.y + (obst.y - last_y)*(1-friction)
+		obst.angle = obst.angle + (obst.angle - last_angle)*(1-friction)
+
+		local new_x, new_y, friction, nx, ny = collide_sdf(obst.x, obst.x, obst.y, obst.y, 10, obstacle_sdf)
+		if friction > 0.7 then
+			obst.x = new_x
+			obst.y = new_y
+		end
+
+		local has_warped = false
+		while obst.x < 0 do
+			obst.x = obst.x + 1920
+			has_warped = true
+		end
+		while obst.x > 1920 do
+			obst.x = obst.x - 1920
+			has_warped = true
+		end
+		while obst.y - obst.z < 0 do
+			obst.y = obst.y + 980
+			has_warped = true
+		end
+		while obst.y - obst.z > 980 do
+			obst.y = obst.y - 980
+			has_warped = true
+		end
+
+	end
+end
+
+function render_obstacles()
+	for _,obst in pairs(obstacles) do
+		--print("---")
+		local direction_steps = 8
+		local angle_steps = 8
+		local angle_i = math.mod(math.floor(obst.angle/math.pi*angle_steps), angle_steps*2)
+		while angle_i < 0 do
+			angle_i = angle_i + angle_steps*2
+		end
+		local direction_offset = 0
+		--print(angle_i)
+		if angle_i >= angle_steps then
+			angle_i = 2*angle_steps - angle_i - 1
+			direction_offset = direction_steps/2
+		end
+		local direction_i = math.mod(math.floor(obst.direction/math.pi/2*direction_steps)+direction_offset, direction_steps)
+		while direction_i < 0 do
+			direction_i = direction_i + direction_steps
+		end
+		local i = direction_i*angle_steps+angle_i + 1
+		--print(angle_i)
+		--print(direction_i)
+		--print(i)
+		love.graphics.draw(obst.sprites[i],obst.x-obst.sprite_w/2, obst.y-obst.z-obst.sprite_h/2)
+	end
+end
+
+local snow_flakes = {}
+local snow_flake_sprite = love.graphics.newImage("Assets/Effects/snowflake.png")
+
+function spawn_snow()
+	--table.insert(snow_flakes, {x = math.random()*1920, y=math.random()*1200, z = 300, vx = math.random()*2-1})
+end
+
+function update_snow(dt)
+	local speed = 40
+	for _,flake in pairs(snow_flakes) do 
+		if flake.z > 0 then
+			flake.z = flake.z - dt*0.3*speed
+			flake.x = flake.x + flake.vx*dt*speed
+			flake.vx = flake.vx*0.9 + 0.1*(math.random()*2-1)
+		end
+	end
+end
+
+function render_snow(fallen)
+	love.graphics.setColor(1,1,1,1)
+	--local points = {}
+	for _,flake in pairs(snow_flakes) do 
+		if (fallen and flake.z <= 0) or (not fallen and flake.z > 0) then
+			love.graphics.draw(snow_flake_sprite, flake.x, flake.y-flake.z)
+		end
+		--table.insert(points, {flake.x, flake.y-flake.z})
+	end
+	--love.graphics.points(points)
 end
 
 function reset_game()
@@ -64,8 +237,9 @@ function reset_game()
 		fsp.sound = love.audio.newSource(sound_file,"static")
 	end
 	for i,player in pairs(active_players) do
-		player.x = start_positions[i].x
-		player.y = start_positions[i].y
+		j = math.random(#car_names)
+		player.x = start_positions[j].x + math.random()*200
+		player.y = start_positions[j].y + math.random()*200
 		player.vx = 0
 		player.vy = 0
 		player.steering_angle = 3*math.pi/2
@@ -76,24 +250,40 @@ function reset_game()
 		player.boost_cooldown = 0
 		player.score = {}
 		player.inventory = nil
-		local_car_name = car_names[1]
+		i = math.random(#car_names)
+		local_car_name = car_names[math.random(#car_names)]
 		if i <= #car_names then
 			car_name =car_names[i]
 		end
 		player.sprite = load_car_sprite(car_name)
 		player.skidmarks_verts = {{}, {}, {}, {}}
 		player.skidmarks_mesh_id = nil
+		if not player.active then
+			player.ai_state = {
+				drift_cooldown = math.random()*3
+			}
+		end
 
 	end
 	skidmarks_meshes = {}
+	snow_flakes = {}
+	for i=1,200 do
+		spawn_snow()
+	end
+	obstacles = {}
+	for i=1,32 do
+		add_obstacle()
+	end
 end
 
 function load_game()
+	load_obstacle_sprites()
 	reset_game()
 	pickup_sound =love.audio.newSource("Assets/Sound/pickup.wav", "static")
 	eat_sound =love.audio.newSource("Assets/Sound/bite.wav", "static")
 	phone_sound =love.audio.newSource("Assets/Sound/phone.wav", "static")
 	bkg_image = love.graphics.newImage("Assets/City/townmap_05.png")
+	--bkg_video = love.graphics.newVideo("Assets/VideoTest/test.ogg")
 	speech_bubble = love.graphics.newImage("Assets/Speech_Bubble/Speech_Bubble_v01.png")
 	local obst_data = love.filesystem.read("string", "Assets/City/townmap_05_sdf.sdf")
 	local w, h, pos = love.data.unpack("=ii",obst_data)
@@ -150,6 +340,25 @@ function spawn_food()
 			break
 		end
 	end
+end
+
+function player_sdf_get_value(players,x,y)
+	local dist = 99999
+	for _,player in pairs(players) do
+		local dx = x - player.x
+		local dy = y - player.y
+		local d = dx*dx + dy*dy
+		if d < dist then
+			dist = d
+		end
+	end
+	return dist
+end
+function player_sdf_get_gradient(players,x,y)
+	local delta = 0.5
+	local dx = (player_sdf_get_value(players,x+delta,y) - player_sdf_get_value(players,x-delta,y))/delta
+	local dy = (player_sdf_get_value(players,x,y+delta) - player_sdf_get_value(players,x,y-delta))/delta
+	return dx,dy
 end
 
 function sdf_get_value(sdf,x,y)
@@ -352,7 +561,18 @@ function player_steer(player, target_angle, target_speed_fraction, drift, boost,
 end
 
 function update_game(dt)
+	if math.random() < 0.2 then spawn_snow() end
+	update_snow(dt)
 	if game_countdown < 0 then 
+		local food_positions = {}
+		for i,player in pairs(active_players) do
+			if player.inventory then
+				table.insert(food_positions, {x=player.x, y=player.y})
+			end
+		end
+		for i,pickup in pairs(pickups) do
+			table.insert(food_positions, {x=pickup.x, y=pickup.y})
+		end
 		local pre_collision_players_pos = {}
 		for i,player in pairs(active_players) do
 			local target_speed = 0
@@ -361,7 +581,7 @@ function update_game(dt)
 			local dy = 0
 			local drift = false
 			local boost = false
-			if player.input_keys then
+			if player.active and player.input_keys then
 				if tank_controls then
 					local angle = player.steering_angle
 					if love.keyboard.isDown(player.input_keys.up) then
@@ -396,7 +616,7 @@ function update_game(dt)
 				if love.keyboard.isDown(player.input_keys.drift) then
 					drift = true
 				end
-			elseif player.input_joystick then
+			elseif player.active and player.input_joystick then
 				local gpx = player.input_joystick:getGamepadAxis("leftx")
 				if math.abs(gpx) < 0.2 then
 					gpx = 0
@@ -421,6 +641,57 @@ function update_game(dt)
 				if reverse_speed > 0.3 then
 					target_speed = -reverse_speed*0.3
 				end
+			else
+				--NOTE(Vidar):"AI"
+				target_speed = 1
+				local prev_dx = math.cos(player.steering_angle)
+				local prev_dy = math.sin(player.steering_angle)
+				local random_dx = 2*math.random()-1
+				local random_dy = 2*math.random()-1
+				local target_dx = 0
+				local target_dy = 0
+				if food_positions[1] then
+					target_dx = food_positions[1].x - player.x
+					target_dy = food_positions[1].y - player.y
+				end
+				if player.inventory and hungry_people[1] then
+					target_dx = hungry_people[1].x - player.x
+					target_dy = hungry_people[1].y - player.y
+				end
+				local n = target_dx*target_dx + target_dy*target_dy
+				if n > 0.1 then
+					target_dx = target_dx/n
+					target_dy = target_dy/n
+				end
+				local other_players = {}
+				for j,p in pairs(players) do 
+					if i ~= j and not p.inventory then
+						table.insert(other_players, p)
+					end
+				end
+				player_sdf_dx, player_sdf_dy = player_sdf_get_gradient(other_players,player.x,player.y)
+				player_sdf = player_sdf_get_value(other_players,player.x,player.y)
+				sdf_dx, sdf_dy = sdf_get_gradient(obstacle_sdf,player.x/1920,player.y/980)
+				sdf = sdf_get_value(obstacle_sdf,player.x/1920,player.y/980)
+
+				local avoidance = 2
+				if player.inventory then 
+					avoidance = 100
+				end
+
+				dx = prev_dx + 0.1*random_dx + 0.05*sdf_dx/sdf + 500*target_dx + avoidance*player_sdf_dx/player_sdf
+				dy = prev_dy + 0.1*random_dy + 0.05*sdf_dy/sdf + 500*target_dy + avoidance*player_sdf_dy/player_sdf
+
+				local ai_state = player.ai_state
+				ai_state.drift_cooldown = ai_state.drift_cooldown - dt
+				if ai_state.drift_cooldown < 0 then
+					ai_state.drift_cooldown = math.random()*3
+					ai_state.drifting = not ai_state.drifting
+				end
+				drift = ai_state.drifting and player.speed > 0.2
+				if math.random() < 0.004 and not drift then 
+					boost = true
+				end
 			end
 			if math.abs(dx) > 0.1 or math.abs(dy) > 0.1 then
 				target_angle = math.atan2(dy,dx)
@@ -432,7 +703,9 @@ function update_game(dt)
 			end
 			if boost then
 				player.boost_cooldown = 2
-				player.input_joystick:setVibration(1.0,0.2,0.2)
+				if player.input_joystick then
+					player.input_joystick:setVibration(1.0,0.2,0.2)
+				end
 			end
 
 			local do_skidmarks = drift
@@ -618,6 +891,7 @@ function update_game(dt)
 				hungry_people[j] = nil
 			end
 		end
+		update_obstacles(dt,post_collision_players_pos)
 		for i,player in pairs(active_players) do
 			player.x = post_collision_players_pos[i].x
 			player.y = post_collision_players_pos[i].y
@@ -688,8 +962,17 @@ function draw_game(dt)
 	love.graphics.push()
 	love.graphics.translate(0,100)
 	love.graphics.setColor(1,1,1,1)
-	love.graphics.draw(bkg_image)
+	if bkg_video then 
+		if not bkg_video:isPlaying() then
+			bkg_video:rewind()
+			bkg_video:play()
+		end
+		love.graphics.draw(bkg_video)
+	else
+		love.graphics.draw(bkg_image)
+	end
 
+	render_snow(true)
 
 	if false then
 		local rect_w = 1920/obstacle_sdf.w
@@ -710,6 +993,7 @@ function draw_game(dt)
 	for _,mesh in pairs(skidmarks_meshes) do
 		love.graphics.draw(mesh)
 	end
+	love.graphics.setColor(1,1,1,1)
 
 	for i_player,player in pairs(active_players) do
 		love.graphics.setColor(1,1,1,1)
@@ -742,6 +1026,7 @@ function draw_game(dt)
 		end
 	end
 	love.graphics.setColor(1,1,1,1)
+	render_obstacles()
 
 	for _,pickup in pairs(pickups) do 
 		if pickup then
@@ -774,6 +1059,7 @@ function draw_game(dt)
 			love.graphics.circle("fill",person.x,person.y,2)
 		end
 	end
+	render_snow(false)
 	love.graphics.pop()
 
 	love.graphics.setColor(0,0,0,1)
